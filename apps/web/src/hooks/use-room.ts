@@ -1,0 +1,122 @@
+import type {
+  ReactionBurst,
+  RoomEvent,
+  RoomState,
+} from "@roomwave/shared";
+
+import { useCallback, useEffect, useState } from "react";
+
+import { useRoomStream } from "./use-room-stream";
+import { getRoomState } from "../lib/api";
+
+/**
+ * Canonical room state + ephemeral channels.
+ * Aggregate events patch state in place; structural changes refetch.
+ * `arrival` increments per arriving response and drives counter pulses.
+ */
+export function useRoom(roomId: string) {
+  const [state, setState] = useState<RoomState | null>(null);
+  const [burst, setBurst] = useState<ReactionBurst | null>(null);
+  const [arrival, setArrival] = useState(0);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!roomId) return;
+    let active = true;
+    const refresh = () =>
+      getRoomState(roomId)
+        .then((next) => {
+          if (active) {
+            setError("");
+            setState(next);
+          }
+        })
+        .catch((caught) => {
+          if (active) {
+            setError(
+              caught instanceof Error ? caught.message : "Room unavailable.",
+            );
+          }
+        });
+    void refresh();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [roomId]);
+
+  const handleEvent = useCallback(
+    (event: RoomEvent) => {
+      switch (event.type) {
+        case "room.snapshot":
+          setState(event.state);
+          break;
+
+        case "aggregate.updated":
+          setState((current) =>
+            current && current.activity?.id === event.activityId
+              ? {
+                  ...current,
+                  aggregate: event.aggregate,
+                  responseCount: event.responseCount,
+                  momentum: event.momentum,
+                }
+              : current,
+          );
+          break;
+
+        case "response.created":
+          setArrival((tick) => tick + 1);
+          break;
+
+        case "activity.started":
+        case "activity.state":
+          // Structural change: pull a fresh authoritative snapshot.
+          void getRoomState(roomId).then(setState).catch(() => null);
+          break;
+
+        case "participant.count":
+          setState((current) =>
+            current ? { ...current, participantCount: event.count } : current,
+          );
+          break;
+
+        case "presence.changed":
+          setState((current) =>
+            current
+              ? {
+                  ...current,
+                  onlineCount: event.onlineCount,
+                  presence: event.participants,
+                }
+              : current,
+          );
+          break;
+
+        case "reactions":
+          setBurst({ ...event.burst });
+          break;
+
+        default:
+          break;
+      }
+    },
+    [roomId],
+  );
+
+  const connection = useRoomStream(
+    roomId,
+    handleEvent,
+    Boolean(state && state.room.id === roomId),
+  );
+
+  return { state, setState, burst, arrival, connection, error };
+}

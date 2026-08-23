@@ -1,0 +1,13 @@
+.git
+.claude
+.firecrawl
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+.env
+.env.*
+!.env.example

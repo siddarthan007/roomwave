@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+.firecrawl/
+.env
+.env.*
+!.env.example
+
+# Local Roomwave data is runtime state, not source.
+apps/api/data/*.sqlite
+apps/api/data/*.sqlite-shm
+apps/api/data/*.sqlite-wal
+
+# Unused binary from the original Vite scaffold.
+apps/web/src/assets/hero.png

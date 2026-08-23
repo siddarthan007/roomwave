@@ -1,0 +1,358 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Roomwave visual identity.
+   Grammar: festival poster × scoreboard × print. Bright paper, ink, and a
+   small set of loud flat colors. Hard edges, offset shadows, halftone dots.
+   Not glass, not glow, not gradients.
+--------------------------------------------------------------------------- */
+
+@font-face {
+  /* Self-hosted variable display face is avoided on purpose: we use a
+     system-adjacent condensed stack so first paint needs zero font bytes,
+     and the identity comes from weight/width/case, not the family. */
+  font-family: "Roomwave Display";
+  src: local("Archivo Black"), local("Arial Black"), local("Impact");
+  font-display: swap;
+}
+
+:root {
+  --paper: #f4efe3;
+  --paper-deep: #eae2cf;
+  --ink: #17150f;
+  --ink-soft: #4c473a;
+  --red: #e63b2e;
+  --blue: #1d53c4;
+  --yellow: #f2b830;
+  --green: #1d7a4f;
+  --pink: #e85a8a;
+  --orange: #ec7014;
+  --violet: #5b3ea6;
+  --on-ink: var(--paper);
+  --on-red: #0a0906;
+  --on-blue: #fff;
+  --on-yellow: #17150f;
+  --on-green: #fff;
+  --on-pink: #17150f;
+  --on-orange: #17150f;
+  --on-violet: #fff;
+
+  color-scheme: light;
+
+  font-family:
+    "Archivo", "Inter", "Helvetica Neue", Arial, sans-serif;
+
+  background: var(--paper);
+  color: var(--ink);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: clip;
+  background: var(--paper);
+}
+
+.safe-page {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.safe-gutters {
+  padding-left: max(1.25rem, env(safe-area-inset-left));
+  padding-right: max(1.25rem, env(safe-area-inset-right));
+}
+
+.safe-top {
+  padding-top: max(2rem, env(safe-area-inset-top));
+}
+
+.home-hero {
+  font-size: clamp(3.35rem, 10.5vw, 7.3rem);
+  line-height: 0.88;
+  text-wrap: balance;
+}
+
+@media (min-width: 768px) and (max-height: 800px) {
+  .stage-chrome {
+    padding: 1rem 2rem;
+  }
+
+  .stage-status {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    align-items: center;
+    gap: 0.4rem 0.8rem;
+  }
+
+  .stage-sound,
+  .stage-arrival,
+  .stage-status-meta {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .stage-arrival {
+    font-size: 2.5rem;
+    line-height: 1;
+  }
+
+  .stage-status-meta {
+    grid-column: 1 / -1;
+  }
+
+  .stage-content {
+    padding-right: 2rem;
+    padding-bottom: 2rem;
+    padding-left: 2rem;
+  }
+
+  .stage-question {
+    max-width: 22ch;
+    font-size: clamp(2.5rem, 4.7vw, 4rem);
+  }
+
+  .stage-momentum,
+  .stage-result {
+    margin-top: 1.25rem;
+  }
+}
+
+[data-room-theme="signal"] {
+  --paper: #fff1df;
+  --paper-deep: #ffd8b6;
+  --ink: #24120d;
+  --ink-soft: #704334;
+  --red: #f04432;
+  --blue: #215fcf;
+  --yellow: #ffc229;
+  --green: #167c50;
+  --on-red: #24120d;
+}
+
+[data-room-theme="midnight"] {
+  --paper: #171821;
+  --paper-deep: #252832;
+  --ink: #f4eddc;
+  --ink-soft: #c1b9aa;
+  --red: #ff5a4c;
+  --blue: #75a2ff;
+  --yellow: #ffd153;
+  --green: #52cf91;
+  --pink: #ff82ad;
+  --orange: #ff9148;
+  --violet: #a98df8;
+  --on-ink: #171821;
+  --on-red: #17150f;
+  --on-blue: #17150f;
+  --on-green: #17150f;
+  --on-violet: #17150f;
+  color-scheme: dark;
+}
+
+[data-room-theme="midnight"] .bg-white,
+[data-room-theme="midnight"] input,
+[data-room-theme="midnight"] select {
+  background-color: #252832;
+  color: var(--ink);
+}
+
+[data-room-theme="field"] {
+  --paper: #edf3df;
+  --paper-deep: #d2dfb8;
+  --ink: #172016;
+  --ink-soft: #4e6048;
+  --red: #d13e31;
+  --blue: #2459b8;
+  --yellow: #efbd32;
+  --green: #277544;
+  --on-red: #fff;
+}
+
+.theme-swatch[data-preview-theme="paper"],
+.theme-chip[data-preview-theme="paper"] { background: #f4efe3; color: #17150f; }
+.theme-swatch[data-preview-theme="signal"],
+.theme-chip[data-preview-theme="signal"] { background: #f04432; color: #fff; }
+.theme-swatch[data-preview-theme="midnight"],
+.theme-chip[data-preview-theme="midnight"] { background: #171821; color: #f4eddc; }
+.theme-swatch[data-preview-theme="field"],
+.theme-chip[data-preview-theme="field"] { background: #d2dfb8; color: #172016; }
+
+.theme-swatch.is-active,
+.theme-chip.is-active {
+  transform: translate(-2px, -2px);
+}
+
+.signal-choice {
+  position: relative;
+  overflow: hidden;
+}
+
+.signal-choice::after {
+  content: "";
+  position: absolute;
+  inset: auto -20% 10px -20%;
+  height: 4px;
+  background: currentColor;
+  transform: scaleX(0);
+  transition: transform 180ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.signal-choice.is-active::after {
+  transform: scaleX(1);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Display type: oversized, tight, uppercase where it counts. */
+.display {
+  font-family: "Roomwave Display", "Archivo Black", "Arial Black", Impact, sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.mono-tag {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+}
+
+/* Offset-print block shadow is the signature surface treatment. */
+.block-shadow {
+  box-shadow: 6px 6px 0 var(--ink);
+}
+.block-shadow-sm {
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.block-shadow-red {
+  box-shadow: 6px 6px 0 var(--red);
+}
+
+/* Halftone dot field for stage backgrounds */
+.halftone {
+  background-image: radial-gradient(
+    var(--ink-soft) 1px,
+    transparent 1.2px
+  );
+  background-size: 14px 14px;
+  opacity: 0.12;
+}
+
+/* Data-bearing cover used only while a blind round is collecting answers. */
+.blind-stripes {
+  background-image: repeating-linear-gradient(
+    -18deg,
+    transparent 0 18px,
+    var(--paper) 18px 22px
+  );
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--yellow);
+  box-shadow: 3px 3px 0 var(--ink);
+  cursor: grab;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--yellow);
+  box-shadow: 3px 3px 0 var(--ink);
+  cursor: grab;
+}
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  nav[aria-label="Reactions"] {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .stage-safe {
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+@media (min-width: 640px) {
+  .safe-gutters {
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+}
+
+/* Ticket-stub edge */
+.ticket-edge {
+  --notch: 10px;
+  mask:
+    radial-gradient(var(--notch) at 0 50%, transparent 98%, #000) left /
+      51% 100% no-repeat,
+    radial-gradient(var(--notch) at 100% 50%, transparent 98%, #000) right /
+      51% 100% no-repeat;
+}
+
+/* Animated underline sweep for links / active markers */
+.sweep-underline {
+  position: relative;
+}
+.sweep-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  height: 3px;
+  width: 100%;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+.sweep-underline:hover::after,
+.sweep-underline[data-active="true"]::after {
+  transform: scaleX(1);
+}
+
+/* Focus visibility (accessibility non-negotiable) */
+:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

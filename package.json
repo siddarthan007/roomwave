@@ -1,0 +1,22 @@
+{
+  "name": "roomwave",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --parallel --no-orphans --filter '*' dev",
+    "dev:api": "bun --watch apps/api/src/index.ts",
+    "dev:web": "bun run --cwd apps/web dev",
+    "test": "bun test",
+    "typecheck:api": "bun run --cwd apps/api typecheck",
+    "build:web": "bun run --cwd apps/web build",
+    "lint:web": "bun run --cwd apps/web lint",
+    "check": "bun test && bun run typecheck:api && bun run build:web && bun run lint:web"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "esbuild": "0.28.2"
+  }
+}

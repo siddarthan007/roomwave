@@ -1,0 +1,74 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  meanAbsoluteError,
+  median,
+  normalizedEntropy,
+  polarization,
+} from "./analytics";
+
+describe("median", () => {
+  test("empty input is null", () => {
+    expect(median([])).toBeNull();
+  });
+
+  test("odd length", () => {
+    expect(median([3, 1, 2])).toBe(2);
+  });
+
+  test("even length averages the middle pair", () => {
+    expect(median([4, 1, 3, 2])).toBe(2.5);
+  });
+});
+
+describe("normalizedEntropy", () => {
+  test("no votes -> 0", () => {
+    expect(normalizedEntropy([0, 0])).toBe(0);
+  });
+
+  test("all votes on one option -> 0 (full consensus)", () => {
+    expect(normalizedEntropy([10, 0, 0])).toBe(0);
+  });
+
+  test("even spread -> 1", () => {
+    expect(normalizedEntropy([1, 1])).toBe(1);
+    expect(normalizedEntropy([5, 5, 5, 5])).toBeCloseTo(1);
+  });
+
+  test("single option list -> 0", () => {
+    expect(normalizedEntropy([7])).toBe(0);
+  });
+});
+
+describe("polarization", () => {
+  test("empty -> 0", () => {
+    expect(polarization([])).toBe(0);
+  });
+
+  test("all at midpoint -> 0", () => {
+    expect(polarization([500, 500])).toBe(0);
+  });
+
+  test("an even split at extremes -> 1", () => {
+    expect(polarization([0, 1000])).toBe(1);
+  });
+
+  test("unanimous extremes are agreement, not polarization", () => {
+    expect(polarization([0, 0, 0])).toBe(0);
+    expect(polarization([1000, 1000])).toBe(0);
+  });
+
+  test("central cluster scores low", () => {
+    expect(polarization([450, 500, 550])).toBeCloseTo(0.0816, 3);
+  });
+});
+
+describe("meanAbsoluteError", () => {
+  test("null on empty", () => {
+    expect(meanAbsoluteError([], 10)).toBeNull();
+  });
+
+  test("mean of absolute deviations", () => {
+    expect(meanAbsoluteError([8, 12], 10)).toBe(2);
+  });
+});

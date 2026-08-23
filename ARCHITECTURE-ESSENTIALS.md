@@ -80,6 +80,15 @@ Presentation state:
 
 > Animation state is never canonical business state.
 
+### Database startup
+
+The configured SQLite file is migrated before application queries, compatibility
+repairs, or index maintenance can reference its tables. A new volume replays all
+checked-in migrations. A migration-tracked database applies only pending work.
+A complete pre-tracking Roomwave schema may be repaired to the documented legacy
+baseline and marked there without losing data. A partial core schema fails closed
+and requires restore from a valid backup.
+
 ---
 
 ## 4. Realtime Rule

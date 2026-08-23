@@ -300,3 +300,30 @@ completed revisions.
 
 Mode tests include an initial-only response and independently assert sealed
 forecast total, revision total, shares, and movement flows.
+
+## 2026-08-23 - Fresh Docker volumes crashed before migration
+
+### Failure
+
+The production container restarted continuously with `no such table:
+main.responses` on a new named volume.
+
+### Root cause
+
+Database module initialization created response indexes before any command had
+applied the checked-in Drizzle migrations. Development used an older populated
+database, so the empty-volume path was absent from the release suite.
+
+### New invariant/check
+
+Database startup applies migrations before serving. Complete databases from
+pre-migration releases are repaired and baselined at migration `0001` without
+replaying table creation. Partial core schemas fail closed with an explicit
+restore message.
+
+### Evidence
+
+The database startup suite launches isolated Bun processes against a new file,
+a populated legacy schema, and a partial schema. It verifies idempotent startup,
+two fresh migrations, legacy row preservation, compatibility columns, response
+indexes, and the corruption boundary.

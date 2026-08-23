@@ -47,6 +47,12 @@ Only add reverse-proxy socket addresses to `ROOMWAVE_TRUSTED_PROXY_IPS`; direct
 client forwarding headers are ignored, and trusted chains are walked from the
 server outward before a rate-limit identity is chosen.
 
+The API applies checked-in Drizzle migrations to `ROOMWAVE_DB_PATH` before it
+serves requests. A complete database from releases that predate migration
+tracking is repaired and baselined without replaying table creation. A partial
+Roomwave schema fails closed with a restore instruction instead of guessing
+through possible corruption.
+
 ## Verify
 
 ```text
@@ -67,14 +73,15 @@ does not claim that every participant is currently online.
 
 Before a public release:
 
-1. Apply the generated Drizzle migration to the persistent database volume.
+1. Back up the persistent database volume before deploying an image with new
+   migrations. The API applies pending checked-in migrations during startup.
 2. Terminate TLS at a reverse proxy and preserve streaming responses with a
    proxy idle timeout longer than the five-second SSE heartbeat.
 3. Run one API process per SQLite database. Horizontal scaling needs a shared
    event bus, distributed limits, and a database designed for concurrent writers.
 4. Run `bun run check`, dependency advisory checks, a production-origin smoke
    test, and a representative phone plus projector load test.
-5. Back up the SQLite database and verify restore before inviting a real audience.
+5. Verify SQLite restore before inviting a real audience.
 
 Product and implementation rules live in `PRD.md`, `ARCHITECTURE.md`,
 `ARCHITECTURE-ESSENTIALS.md`, and `AGENT.md`.

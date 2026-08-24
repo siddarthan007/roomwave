@@ -3,7 +3,7 @@ import type {
   ActivityAggregate,
 } from "@roomwave/shared";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { motion } from "motion/react";
 import { useDrag } from "@use-gesture/react";
@@ -57,8 +57,10 @@ export function PulseChoiceInput({
     { type: "pulse-choice" }
   >;
 
-  const [selected, setSelected] = useState<string | null>(null);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const [selected, setSelected] = useState<string | null>(
+    () => restore<{ optionId: string }>()?.optionId ?? null,
+  );
 
   return (
     <div className="space-y-4">
@@ -123,10 +125,13 @@ export function SpectrumInput({
     { type: "spectrum" }
   >;
 
-  const [value, setValue] = useState(500);
-  const [committed, setCommitted] = useState<number | null>(null);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const storedSpectrum = restore<{ value: number }>();
+  const [value, setValue] = useState(storedSpectrum?.value ?? 500);
+  const [committed, setCommitted] = useState<number | null>(
+    storedSpectrum?.value ?? null,
+  );
   const [dragging, setDragging] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
 
   async function place(next: number) {
     if (pending || next === committed) return;
@@ -513,9 +518,11 @@ const clamp = (value: number, min: number, max: number) =>
 export function HotTakeInput({ activity, token }: CommonProps) {
   const config = activity.config as Extract<Activity["config"], { type: "hot-take" }>;
   const railRef = useRef<HTMLDivElement>(null);
-  const [value, setValue] = useState(0);
-  const [committed, setCommitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const keyRepeatTimer = useRef<number | null>(null);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const storedHotTake = restore<{ value: number }>();
+  const [value, setValue] = useState(storedHotTake?.value ?? 0);
+  const [committed, setCommitted] = useState(Boolean(storedHotTake));
 
   async function place(next: number) {
     if (pending) return;
@@ -527,6 +534,11 @@ export function HotTakeInput({ activity, token }: CommonProps) {
       navigator.vibrate?.(12);
     }
   }
+
+  useEffect(() => () => {
+    // Unmount mid-debounce (mode switch, room end): drop the pending submit.
+    if (keyRepeatTimer.current) window.clearTimeout(keyRepeatTimer.current);
+  }, []);
 
   const bind = useDrag(
     ({ xy: [clientX], last }) => {
@@ -559,8 +571,23 @@ export function HotTakeInput({ activity, token }: CommonProps) {
         onKeyDown={(event) => {
           if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
           event.preventDefault();
+          // Holding an arrow fires OS auto-repeat; debounce so a held key
+          // does not machine-gun the submit endpoint.
           const next = event.key === "Home" ? -1000 : event.key === "End" ? 1000 : value + (event.key === "ArrowLeft" ? -100 : 100);
-          void place(next);
+          if (!Number.isFinite(next)) return;
+          if (keyRepeatTimer.current) window.clearTimeout(keyRepeatTimer.current);
+          keyRepeatTimer.current = window.setTimeout(() => {
+            keyRepeatTimer.current = null;
+            void place(next);
+          }, 220);
+        }}
+        onKeyUp={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+          // Key released before the debounce fired: commit immediately.
+          if (keyRepeatTimer.current) {
+            window.clearTimeout(keyRepeatTimer.current);
+            keyRepeatTimer.current = null;
+          }
         }}
         className="relative h-24 touch-pan-y border-4 border-[var(--ink)] bg-[linear-gradient(90deg,var(--red)_0_49.5%,var(--paper)_49.5%_50.5%,var(--blue)_50.5%)]"
       >

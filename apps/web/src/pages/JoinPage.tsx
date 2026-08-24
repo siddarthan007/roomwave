@@ -16,6 +16,22 @@ import {
 } from "../components/ui";
 import { PixelAvatar } from "../components/PixelAvatar";
 
+/**
+ * crypto.randomUUID() only exists in secure contexts (https:// or
+ * localhost). Plain-HTTP LAN deployments would throw here and blank the
+ * join page, so fall back to a random-hex seed.
+ */
+function randomAvatarSeed(): string {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  let value = "";
+  for (let index = 0; index < 32; index += 1) {
+    value += Math.floor(Math.random() * 16).toString(16);
+  }
+  return value;
+}
+
 export function JoinPage() {
   const { code } = useParams();
   const navigate = useNavigate();
@@ -23,7 +39,7 @@ export function JoinPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [avatarSeed, setAvatarSeed] = useState(() => crypto.randomUUID());
+  const [avatarSeed, setAvatarSeed] = useState(randomAvatarSeed);
 
   async function join() {
     if (!code) return;
@@ -64,7 +80,7 @@ export function JoinPage() {
       <div className="mt-8 grid grid-cols-[auto_1fr] items-end gap-4">
         <button
           type="button"
-          onClick={() => setAvatarSeed(crypto.randomUUID())}
+          onClick={() => setAvatarSeed(randomAvatarSeed())}
           className="group text-left"
           aria-label="Shuffle character"
         >

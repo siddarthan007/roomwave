@@ -77,7 +77,7 @@ describe("database startup", () => {
       database
         .query("SELECT COUNT(*) AS count FROM __drizzle_migrations")
         .get(),
-    ).toEqual({ count: 2 });
+    ).toEqual({ count: 3 });
     expect(names(database, "index")).toEqual(
       expect.arrayContaining([
         "responses_activity_index",
@@ -156,7 +156,7 @@ describe("database startup", () => {
       database
         .query("SELECT COUNT(*) AS count FROM __drizzle_migrations")
         .get(),
-    ).toEqual({ count: 1 });
+    ).toEqual({ count: 2 });
     expect(names(database, "index")).not.toContain(
       "response_activity_participant_unique",
     );

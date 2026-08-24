@@ -15,6 +15,13 @@
       "when": 1787488370484,
       "tag": "0001_warm_warstar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787654400000,
+      "tag": "0002_foreign_key_indexes",
+      "breakpoints": true
     }
   ]
 }

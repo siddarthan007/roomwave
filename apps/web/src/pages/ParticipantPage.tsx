@@ -34,6 +34,7 @@ export function ParticipantPage() {
   const navigate = useNavigate();
   const { state, burst, connection, error: roomError } = useRoom(roomId ?? "");
   const lastSent = useRef(0);
+  const sharedTimer = useRef<number | null>(null);
   const lastPhase = useRef<string | null>(null);
   const [shared, setShared] = useState(false);
   const session = useMemo(
@@ -70,6 +71,14 @@ export function ParticipantPage() {
     }
     lastPhase.current = phase;
   }, [phase, soundMode]);
+
+  useEffect(
+    () => () => {
+      // Unmount mid-timeout: drop the pending "shared ✓" reset.
+      if (sharedTimer.current !== null) window.clearTimeout(sharedTimer.current);
+    },
+    [],
+  );
 
   if (!roomId) throw new Error("Room ID missing");
 
@@ -110,7 +119,11 @@ export function ParticipantPage() {
         await navigator.clipboard.writeText(`${text} ${url}`);
       }
       setShared(true);
-      window.setTimeout(() => setShared(false), 1600);
+      if (sharedTimer.current !== null) window.clearTimeout(sharedTimer.current);
+      sharedTimer.current = window.setTimeout(() => {
+        sharedTimer.current = null;
+        setShared(false);
+      }, 1600);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
     }
@@ -155,6 +168,14 @@ export function ParticipantPage() {
       ) : activity.state === "live" ? (
         <section className="mt-10">
           <Headline size="md">{activity.prompt}</Headline>
+          {connection !== "connected" && (
+            <p
+              role="status"
+              className="mono-tag mb-4 border-2 border-[var(--ink)] bg-[var(--paper-deep)] px-4 py-2"
+            >
+              reconnecting: your recorded answer is safe
+            </p>
+          )}
           {activity.deadlineAt && (
             <div className="mt-5">
               <RoundClock

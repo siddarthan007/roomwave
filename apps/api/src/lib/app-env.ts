@@ -26,17 +26,23 @@ export function resolveClientAddress(
   if (!peer || isIP(peer) === 0) return "unknown";
   if (!trustedPeers.has(peer) || !forwardedFor) return peer;
 
-  // Walk from the socket peer toward the client. Stop at the first address
-  // outside the explicit proxy allowlist, so a spoofed left-hand value cannot
-  // mint arbitrary limiter buckets when the edge appends X-Forwarded-For.
+  // Standard trusted-hop-count walk: each trusted proxy strips exactly one
+  // address it prepended (or appends, per deployment — either way every
+  // trusted hop accounts for one entry). Walk from the socket peer toward the
+  // client through at most N = |trusted allowlist| entries; the first address
+  // beyond that budget is the client. A spoofed left-hand value can no longer
+  // pin a limiter bucket to a trusted proxy IP, because reaching any chain
+  // entry requires passing through untrusted addresses that exhaust the
+  // budget first.
   const chain = forwardedFor
     .split(",")
     .map((value) => value.trim())
     .filter((value) => isIP(value) !== 0);
   let address = peer;
-  for (let index = chain.length - 1; index >= 0; index -= 1) {
+  const maxHops = Math.min(trustedPeers.size, chain.length);
+  for (let hop = 0; hop < maxHops; hop += 1) {
     if (!trustedPeers.has(address)) break;
-    address = chain[index];
+    address = chain[chain.length - 1 - hop];
   }
   return address;
 }

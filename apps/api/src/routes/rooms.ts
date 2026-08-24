@@ -6,6 +6,7 @@ import {
   joinRoomSchema,
   updateRoomSettingsSchema,
 } from "@roomwave/shared";
+import type { RoomSettings } from "@roomwave/shared";
 
 import {
   roomCreateLimiter,
@@ -15,6 +16,7 @@ import {
   globalJoinAttemptLimiter,
   publicReadLimiter,
   presenceLimiter,
+  hostCommandLimiter,
 } from "../lib/rate-limit";
 import type { AppEnv } from "../lib/app-env";
 import { remoteClientKey } from "../lib/app-env";
@@ -378,10 +380,14 @@ roomRoutes.post(
       })
       .run();
 
+    // Join is a single discrete event; publish immediately so the new
+    // player appears without waiting out the coalescing window.
     presenceHub.touch(
       joinableRoom.id,
       { id: participantId, displayName, avatarSeed },
       joinableRoom.settings.showPresence,
+      Date.now(),
+      { immediate: true },
     );
 
     const participantCount = getRoomState(joinableRoom.id)?.participantCount ?? 1;
@@ -421,6 +427,12 @@ roomRoutes.post(
 
 roomRoutes.patch("/:roomId/settings", async (c) => {
   const roomId = c.req.param("roomId");
+  if (!hostCommandLimiter.allow(`host:${roomId}`)) {
+    return c.json(
+      { error: { code: "RATE_LIMITED", message: "Too many setting changes. Slow down." } },
+      429,
+    );
+  }
   const token = getBearerToken(c.req.header("Authorization"));
   if (!token || !(await isHostAuthorized(roomId, token))) {
     return c.json(
@@ -444,9 +456,25 @@ roomRoutes.patch("/:roomId/settings", async (c) => {
     );
   }
 
+  const stored = db
+    .select({ settings: rooms.settings })
+    .from(rooms)
+    .where(eq(rooms.id, roomId))
+    .get();
+  if (!stored) {
+    return c.json(
+      { error: { code: "ROOM_NOT_FOUND", message: "Room not found or already ended." } },
+      404,
+    );
+  }
+
+  // Merge validated fields over stored settings: a partial PATCH must
+  // never reset omitted fields to defaults.
+  const mergedSettings: RoomSettings = { ...stored.settings, ...parsed.data };
+
   const updated = db
     .update(rooms)
-    .set({ settings: parsed.data })
+    .set({ settings: mergedSettings })
     .where(and(eq(rooms.id, roomId), ne(rooms.status, "ended")))
     .returning({ id: rooms.id })
     .get();
@@ -459,7 +487,7 @@ roomRoutes.patch("/:roomId/settings", async (c) => {
 
   const state = getRoomState(roomId);
   if (state) roomHub.publish(roomId, { type: "room.snapshot", state });
-  return c.json({ settings: parsed.data });
+  return c.json({ settings: mergedSettings });
 });
 
 roomRoutes.post("/:roomId/presence", async (c) => {

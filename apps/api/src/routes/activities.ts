@@ -30,6 +30,7 @@ import {
   reactionRoomLimiter,
   responseLimiter,
   publicReadLimiter,
+  hostCommandLimiter,
 } from "../lib/rate-limit";
 
 import { aggregateScheduler } from "../services/aggregate-scheduler";
@@ -204,6 +205,13 @@ function withModerationStatus(
 async function hostActivityAction(c: AppContext) {
   const activityId = c.req.param("activityId")!;
   const actionParam = c.req.param("action")!;
+
+  if (!hostCommandLimiter.allow(`host:${activityId}`)) {
+    return c.json(
+      { error: { code: "RATE_LIMITED", message: "Too many host commands. Slow down." } },
+      429,
+    );
+  }
 
   if (
     actionParam === "responses" ||

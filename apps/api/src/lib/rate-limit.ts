@@ -79,6 +79,13 @@ export const reactionRoomLimiter = new RateLimiter(240, 1_000);
 /** Public event stream reconnects: enough for tabs, bounded against churn. */
 export const eventStreamLimiter = new RateLimiter(30, 60_000);
 
+/**
+ * Host commands: authenticated, but a buggy host client or leaked token must
+ * not hammer transitions/moderation/settings unbounded. Generous — a host
+ * toggling settings and running rounds never feels this.
+ */
+export const hostCommandLimiter = new RateLimiter(120, 60_000);
+
 /** One room may fill a hall, but must not grow listeners without a ceiling. */
 export const MAX_EVENT_SUBSCRIBERS_PER_ROOM = 500;
 export const MAX_EVENT_SUBSCRIBERS_GLOBAL = 2_000;

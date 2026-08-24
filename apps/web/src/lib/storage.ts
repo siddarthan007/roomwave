@@ -5,22 +5,37 @@ export interface ParticipantSession {
   avatarSeed: string;
 }
 
+// localStorage throws in privacy modes / when storage is disabled
+// (Safari lockdown, embedded webviews). Values then fall back to an
+// in-memory map for the tab lifetime instead of crashing the page.
+const memoryStore = new Map<string, string>();
+
+function safeSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    memoryStore.set(key, value);
+  }
+}
+
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memoryStore.get(key) ?? null;
+  }
+}
 export function saveHostToken(
   roomId: string,
   token: string,
 ) {
-  localStorage.setItem(
-    `roomwave:host:${roomId}`,
-    token,
-  );
+  safeSet(`roomwave:host:${roomId}`, token);
 }
 
 export function getHostToken(
   roomId: string,
 ) {
-  return localStorage.getItem(
-    `roomwave:host:${roomId}`,
-  );
+  return safeGet(`roomwave:host:${roomId}`);
 }
 
 export function saveParticipantSession(
@@ -28,26 +43,16 @@ export function saveParticipantSession(
   session: ParticipantSession,
   roomCode?: string,
 ) {
-  localStorage.setItem(
-    `roomwave:participant:${roomId}`,
-
-    JSON.stringify(session),
-  );
+  safeSet(`roomwave:participant:${roomId}`, JSON.stringify(session));
   if (roomCode) {
-    localStorage.setItem(
-      `roomwave:join:${roomCode.trim().toUpperCase()}`,
-      roomId,
-    );
+    safeSet(`roomwave:join:${roomCode.trim().toUpperCase()}`, roomId);
   }
 }
 
 export function getParticipantSession(
   roomId: string,
 ): ParticipantSession | null {
-  const raw =
-    localStorage.getItem(
-      `roomwave:participant:${roomId}`,
-    );
+  const raw = safeGet(`roomwave:participant:${roomId}`);
 
   if (!raw) {
     return null;
@@ -70,9 +75,7 @@ export function getParticipantSession(
 export function getParticipantSessionForCode(
   roomCode: string,
 ): { roomId: string; session: ParticipantSession } | null {
-  const roomId = localStorage.getItem(
-    `roomwave:join:${roomCode.trim().toUpperCase()}`,
-  );
+  const roomId = safeGet(`roomwave:join:${roomCode.trim().toUpperCase()}`);
   if (!roomId) return null;
   const session = getParticipantSession(roomId);
   return session ? { roomId, session } : null;

@@ -12,12 +12,17 @@ interface PresenceEntry extends PublicParticipant {
 class PresenceHub {
   private rooms = new Map<string, Map<string, PresenceEntry>>();
   private visibility = new Map<string, boolean>();
+  // Dirty-room coalescing (~350ms window, per ARCHITECTURE-ESSENTIALS §9.4):
+  // burst input must not produce one broadcast per event. A 500-person room
+  // voting at once otherwise fans out hundreds of full-presence payloads.
+  private dirtyTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   touch(
     roomId: string,
     participant: PublicParticipant,
     showParticipants: boolean,
     now = Date.now(),
+    options: { immediate?: boolean } = {},
   ) {
     let room = this.rooms.get(roomId);
     if (!room) {
@@ -26,7 +31,30 @@ class PresenceHub {
     }
     room.set(participant.id, { ...participant, lastSeen: now });
     this.visibility.set(roomId, showParticipants);
-    this.publish(roomId, now);
+    if (options.immediate) {
+      this.cancelScheduled(roomId);
+      this.publish(roomId, now);
+      return;
+    }
+    // Default path: coalesce. Burst call sites (responses/reactions) rely on
+    // this so a 500-person voting burst cannot fan out one broadcast each.
+    this.schedulePublish(roomId);
+  }
+
+  private schedulePublish(roomId: string) {
+    if (this.dirtyTimers.has(roomId)) return;
+    const timer = setTimeout(() => {
+      this.dirtyTimers.delete(roomId);
+      this.publish(roomId);
+    }, 350);
+    timer.unref?.();
+    this.dirtyTimers.set(roomId, timer);
+  }
+
+  private cancelScheduled(roomId: string) {
+    const timer = this.dirtyTimers.get(roomId);
+    if (timer) clearTimeout(timer);
+    this.dirtyTimers.delete(roomId);
   }
 
   snapshot(roomId: string, showParticipants: boolean, now = Date.now()) {
@@ -49,7 +77,18 @@ class PresenceHub {
     for (const [participantId, entry] of room) {
       if (now - entry.lastSeen >= PRESENCE_TTL_MS) room.delete(participantId);
     }
-    if (room.size === 0) this.rooms.delete(roomId);
+    if (room.size === 0) {
+      this.rooms.delete(roomId);
+      // Otherwise one boolean per room accumulates forever on a long-lived server.
+      this.visibility.delete(roomId);
+    }
+  }
+
+  /** Test/observability hook: flush any pending coalesced publish now. */
+  flushScheduled(roomId: string) {
+    if (!this.dirtyTimers.has(roomId)) return;
+    this.cancelScheduled(roomId);
+    this.publish(roomId);
   }
 
   private publish(roomId: string, now = Date.now()) {

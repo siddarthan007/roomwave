@@ -17,6 +17,8 @@ import { PixelAvatar } from "../components/PixelAvatar";
 import { RoundClock } from "../components/RoundClock";
 import { SoundToggle } from "../components/SoundToggle";
 import { playRoomSound } from "../lib/sound";
+import { downloadReceiptCsv, receiptRows } from "../lib/receipt";
+import { downloadReceiptPng } from "../lib/receipt-png";
 
 const PHASE_COPY: Record<ActivityState, string> = {
   draft: "READY",
@@ -45,9 +47,12 @@ export function StagePage() {
   const { roomId } = useParams();
   const { state, burst, connection, error } = useRoom(roomId ?? "");
   const [qr, setQr] = useState("");
+  const [receiptError, setReceiptError] = useState("");
   const lastPhase = useRef<string | null>(null);
   const lastOnline = useRef(0);
   const roomCode = state?.room.code;
+  // The blink loop is a flashing animation; suppress it for vestibular safety.
+  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (!roomCode) return;
@@ -155,8 +160,8 @@ export function StagePage() {
         <section className="relative z-10 mx-auto grid min-h-[70vh] max-w-5xl place-items-center px-4 text-center sm:px-8">
           <div>
             <motion.p
-              animate={{ opacity: [1, 0.35, 1] }}
-              transition={{ repeat: 2, duration: 1.2 }}
+              animate={shouldReduceMotion ? { opacity: 1 } : { opacity: [1, 0.35, 1] }}
+              transition={{ repeat: shouldReduceMotion ? 0 : 2, duration: 1.2 }}
               className="mono-tag"
             >
               take out your phone
@@ -256,7 +261,8 @@ export function StagePage() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.16 }}
-                  className="relative"
+                  id="rw-receipt-card"
+                  className="rw-receipt-card rw-reveal-stamp relative"
                 >
                   <ModeStagePresentation
                     activity={activity}
@@ -269,10 +275,56 @@ export function StagePage() {
             </AnimatePresence>
           </div>
 
-          {finalResultVisible && (
-            <p className="mono-tag mt-12 border-t-2 border-[var(--ink)] pt-4 text-[var(--ink-soft)]">
-              room receipt / {state.responseCount} voices / {state.room.code}
-            </p>
+          {finalResultVisible && state.aggregate && (
+            <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t-2 border-[var(--ink)] pt-4">
+              <p className="mono-tag text-[var(--ink-soft)]">
+                room receipt / {state.responseCount} voices / {state.room.code}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReceiptError("");
+                    downloadReceiptPng({
+                      roomCode: state.room.code,
+                      mode: activity.type,
+                      rows: [],
+                      responseCount: state.responseCount,
+                    }).catch((caught: unknown) =>
+                      setReceiptError(
+                        caught instanceof Error
+                          ? caught.message
+                          : "Could not render the receipt image.",
+                      ),
+                    );
+                  }}
+                  className="mono-tag block-shadow-sm border-2 border-[var(--ink)] bg-white px-3 py-2 transition-transform active:scale-95"
+                >
+                  export png
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadReceiptCsv(receiptRows(state.aggregate!), {
+                      roomTitle: state.room.title,
+                      roomCode: state.room.code,
+                      mode: activity.type,
+                      prompt: activity.prompt,
+                      responseCount: state.responseCount,
+                      finishedAt: new Date().toISOString(),
+                    })
+                  }
+                  className="mono-tag block-shadow-sm border-2 border-[var(--ink)] bg-white px-3 py-2 transition-transform active:scale-95"
+                >
+                  export csv
+                </button>
+              </div>
+              {receiptError && (
+                <p role="alert" className="mono-tag w-full text-[var(--red)]">
+                  {receiptError}
+                </p>
+              )}
+            </div>
           )}
         </section>
       )}

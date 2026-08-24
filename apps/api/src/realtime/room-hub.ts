@@ -2,8 +2,11 @@ import type {
   RoomEvent,
 } from "@roomwave/shared";
 
+import { assignSequence } from "./event-sequence";
+
 type Listener = (
   event: RoomEvent,
+  seq: number,
 ) => void | Promise<void>;
 
 class RoomHub {
@@ -51,18 +54,22 @@ class RoomHub {
     roomId: string,
     event: RoomEvent,
   ) {
+    // Sequence centrally so ids are identical for every subscriber and events
+    // published with zero listeners still advance the counter (otherwise a
+    // reconnecting client's `after` would collide with the snapshot id).
+    const seq = assignSequence(roomId, event);
     const listeners =
       this.rooms.get(roomId);
 
     if (!listeners) {
-      return;
+      return seq;
     }
 
     for (
       const listener of listeners
     ) {
       Promise.resolve(
-        listener(event),
+        listener(event, seq),
       ).catch((error) => {
         console.error(
           "RoomHub listener error",
@@ -70,6 +77,7 @@ class RoomHub {
         );
       });
     }
+    return seq;
   }
 
   /** Read-only observability hook used by connection tests and local metrics. */

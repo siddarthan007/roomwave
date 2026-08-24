@@ -251,6 +251,67 @@ button:disabled {
   box-shadow: 6px 6px 0 var(--red);
 }
 
+/* Reveal choreography: result content enters with a decisive upward stamp.
+   Applied to the stage result wrapper; children stagger via --rw-i index. */
+.rw-reveal-stamp > * {
+  animation: rw-stamp-in 0.42s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  animation-delay: calc(var(--rw-i, 0) * 70ms);
+}
+
+@keyframes rw-stamp-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rw-reveal-stamp > * {
+    animation: none;
+  }
+}
+
+/* Receipt card: the exported PNG is a designed artifact, not a screenshot.
+   A paper plate with the brand's offset shadow frames whatever the stage is
+   showing; perforated edges stamp it as "a thing you keep" (identity motif:
+   repeats the blind-stripes tear-line device). Purpose (R-31): turns the
+   ephemeral projector view into a shareable object. */
+.rw-receipt-card {
+  position: relative;
+  background: var(--paper);
+  border: 4px solid var(--ink);
+  box-shadow: 10px 10px 0 var(--ink);
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+}
+
+.rw-receipt-card::before,
+.rw-receipt-card::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 0;
+  border-top: 3px dashed color-mix(in srgb, var(--ink) 35%, transparent);
+}
+
+.rw-receipt-card::before {
+  top: 8px;
+}
+
+.rw-receipt-card::after {
+  bottom: 8px;
+}
+
+@media print {
+  .rw-receipt-card {
+    box-shadow: none;
+  }
+}
+
 /* Halftone dot field for stage backgrounds */
 .halftone {
   background-image: radial-gradient(

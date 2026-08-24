@@ -29,7 +29,22 @@ export const createRoomSchema = z.object({
 
 export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 
-export const updateRoomSettingsSchema = roomSettingsSchema;
+/**
+ * PATCH input: every field optional. Built from a defaults-free shape so
+ * absent keys stay absent (Zod v4 keeps applying .default() through
+ * .partial()); the route merges parsed fields over stored settings.
+ */
+export const updateRoomSettingsSchema = z.object({
+  theme: z.enum(["paper", "signal", "midnight", "field"]).optional(),
+  lobbyMessage: z.string().trim().max(100).optional(),
+  allowReactions: z.boolean().optional(),
+  allowLateJoin: z.boolean().optional(),
+  showPresence: z.boolean().optional(),
+  showResponseCount: z.boolean().optional(),
+  participantNames: z.enum(["chosen", "generated"]).optional(),
+  maxParticipants: z.number().int().min(2).max(10_000).optional(),
+  soundMode: z.enum(["off", "soft", "arcade"]).optional(),
+});
 
 export const joinRoomSchema = z.object({
   displayName: z
@@ -70,14 +85,19 @@ export const createSpectrumSchema = z.object({
   resultsMode: resultsModeSchema,
 });
 
+// Guessable numeric range: keeps rendering and MAE math sane when a host
+// typo would otherwise allow magnitudes near 1e308.
+const PREDICTION_VALUE_LIMIT = 1_000_000_000;
+const boundedPredictionValue = z.number().finite().min(-PREDICTION_VALUE_LIMIT).max(PREDICTION_VALUE_LIMIT);
+
 export const createPredictionSchema = z
   .object({
     type: z.literal("prediction"),
     prompt: z.string().trim().min(1, "Question is required").max(160),
     unit: z.string().trim().min(1, "Unit is required").max(12),
-    min: z.number().finite(),
-    max: z.number().finite(),
-    answer: z.number().finite().nullable(),
+    min: boundedPredictionValue,
+    max: boundedPredictionValue,
+    answer: boundedPredictionValue.nullable(),
     resultsMode: resultsModeSchema,
   })
   .refine((data) => data.max > data.min, {

@@ -126,14 +126,20 @@ export function ReactionLayer({
         <span
           key={pulse.id}
           onAnimationEnd={() => setPulse(null)}
-          className="display absolute bottom-10 right-8 border-2
-            border-[var(--ink)] bg-[var(--paper)] px-3 py-1 text-xl block-shadow-sm"
+          className={`display absolute bottom-10 right-8 border-2
+            border-[var(--ink)] bg-[var(--paper)] px-3 py-1 block-shadow-sm ${
+              pulse.extra >= 12 ? "text-3xl" : "text-xl"
+            }`}
           style={{
             color: COLORS[pulse.kind],
             animation: "rw-pulse 1.4s ease-out forwards",
           }}
         >
           +{pulse.extra}
+          {/* Combo: a big burst gets a shout, not more nodes. */}
+          {pulse.extra >= 12 && (
+            <span className="mono-tag ml-2 text-[var(--ink)]">combo!</span>
+          )}
         </span>
       )}
 

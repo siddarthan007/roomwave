@@ -20,6 +20,12 @@ import {
 } from "../lib/api";
 import { getHostToken } from "../lib/storage";
 import {
+  loadPlaylist,
+  makePlaylistEntry,
+  savePlaylist,
+  type PlaylistEntry,
+} from "../lib/playlist";
+import {
   BlockButton,
   ErrorNote,
   Field,
@@ -237,6 +243,10 @@ export function HostPage() {
   const [moderationItems, setModerationItems] = useState<ModerationItem[]>([]);
   const [qr, setQr] = useState("");
   const [copied, setCopied] = useState(false);
+  // Lazy init: the queue is host-local storage, read once at mount.
+  const [playlist, setPlaylist] = useState<PlaylistEntry[]>(() =>
+    roomId ? loadPlaylist(roomId) : [],
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const roomCode = state?.room.code;
@@ -340,6 +350,31 @@ export function HostPage() {
       window.clearInterval(timer);
     };
   }, [moderationActivityId, roomId]);
+
+  function queueForLater() {
+    if (!roomId || !launchReady) return;
+    const entry = makePlaylistEntry(mode, prompt.trim(), {
+      mode,
+      prompt,
+      resultsMode,
+      options,
+      lowLabel,
+      highLabel,
+      unit,
+      numericMin,
+      numericMax,
+    });
+    const next = [...playlist, entry];
+    setPlaylist(next);
+    savePlaylist(roomId, next);
+  }
+
+  function removeFromQueue(id: string) {
+    if (!roomId) return;
+    const next = playlist.filter((entry) => entry.id !== id);
+    setPlaylist(next);
+    savePlaylist(roomId, next);
+  }
 
   async function launch() {
     const hostToken = getHostToken(roomId!);
@@ -785,6 +820,39 @@ export function HostPage() {
       {!activity || phase === "ended" ? (
         /* ---------------- CREATE ---------------- */
         <section className="mt-12">
+          {playlist.length > 0 && (
+            <div className="mb-8 border-2 border-[var(--ink)] bg-[var(--paper-deep)] p-4 block-shadow-sm">
+              <div className="flex items-baseline justify-between">
+                <p className="mono-tag">run of show · {playlist.length} queued</p>
+                <a
+                  href={`/host/${roomId}/remote`}
+                  className="mono-tag underline underline-offset-2"
+                >
+                  presenter remote
+                </a>
+              </div>
+              <ol className="mt-3 space-y-2">
+                {playlist.map((entry, index) => (
+                  <li
+                    key={entry.id}
+                    className="flex items-center justify-between gap-3 border-2 border-[var(--ink)] bg-white px-3 py-2"
+                  >
+                    <span className="min-w-0 truncate text-sm font-bold">
+                      {index + 1}. {entry.title}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFromQueue(entry.id)}
+                      aria-label={`Remove ${entry.title} from queue`}
+                      className="mono-tag shrink-0 px-2 py-1 text-[var(--red)] transition-transform active:scale-95"
+                    >
+                      remove
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
           <Kicker>room modes</Kicker>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {MODES.filter((candidate) => !GAME_TYPES.has(candidate.type)).map((candidate) => (
@@ -1184,13 +1252,24 @@ export function HostPage() {
             </fieldset>
             )}
 
-            <BlockButton
-              onClick={() => void launch()}
-              disabled={busy || !launchReady}
-              wide
-            >
-              {busy ? "launching…" : "launch to room"}
-            </BlockButton>
+                        <div className="flex flex-col gap-2">
+  <BlockButton
+                onClick={() => void launch()}
+                disabled={busy || !launchReady}
+                wide
+              >
+                {busy ? "launching…" : "launch to room"}
+              </BlockButton>
+              <button
+                type="button"
+                onClick={queueForLater}
+                disabled={!launchReady}
+                className="mono-tag border-2 border-[var(--ink)] bg-white px-4 py-3
+                  transition-transform active:scale-95 disabled:opacity-35"
+              >
+                queue for later
+              </button>
+            </div>
           </div>
         </section>
       ) : (

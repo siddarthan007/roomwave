@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
+import { MotionConfig } from "motion/react";
 
 function RouteMetadata() {
   const location = useLocation();
@@ -48,10 +49,11 @@ const ParticipantPage = lazy(() =>
   import("./pages/ParticipantPage").then((module) => ({ default: module.ParticipantPage })),
 );
 const StagePage = lazy(() => import("./pages/StagePage").then((module) => ({ default: module.StagePage })));
+const PresenterPage = lazy(() => import("./pages/PresenterPage").then((module) => ({ default: module.PresenterPage })));
 
 export default function App() {
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       <RouteMetadata />
       <Suspense
       fallback={
@@ -63,11 +65,12 @@ export default function App() {
         <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/host/:roomId" element={<HostPage />} />
+        <Route path="/host/:roomId/remote" element={<PresenterPage />} />
         <Route path="/stage/:roomId" element={<StagePage />} />
         <Route path="/join/:code" element={<JoinPage />} />
         <Route path="/room/:roomId" element={<ParticipantPage />} />
         </Routes>
       </Suspense>
-    </>
+    </MotionConfig>
   );
 }

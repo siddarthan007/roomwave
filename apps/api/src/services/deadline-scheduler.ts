@@ -81,6 +81,8 @@ export async function lockActivityIfExpired(
 
 export function lockDueActivityForRoom(roomId: string, now = Date.now()) {
   const nowIso = new Date(now).toISOString();
+  // Lock EVERY due activity, not just the first: multiple can be due after
+  // reset edge cases, and a single .get() leaves stale live state visible.
   const due = db
     .select({ id: activities.id })
     .from(activities)
@@ -92,7 +94,8 @@ export function lockDueActivityForRoom(roomId: string, now = Date.now()) {
         lte(activities.deadlineAt, nowIso),
       ),
     )
-    .get();
-  if (!due) return;
-  void lockActivityIfExpired(due.id, roomId, false, now);
+    .all();
+  for (const row of due) {
+    void lockActivityIfExpired(row.id, roomId, false, now);
+  }
 }

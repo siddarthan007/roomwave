@@ -1,5 +1,7 @@
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
+
+const TICK_MS = 250;
 
 export function RoundClock({
   deadlineAt,
@@ -13,6 +15,7 @@ export function RoundClock({
   compact?: boolean;
 }) {
   const [remaining, setRemaining] = useState(0);
+  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (!deadlineAt) return;
@@ -20,7 +23,9 @@ export function RoundClock({
     const update = () =>
       setRemaining(Math.max(0, Date.parse(deadlineAt) - (Date.now() + offset)));
     update();
-    const timer = window.setInterval(update, 100);
+    // 4 Hz is plenty for a once-per-second readout and keeps the component
+    // off the render hot path during dense aggregate bursts.
+    const timer = window.setInterval(update, TICK_MS);
     return () => window.clearInterval(timer);
   }, [deadlineAt, serverNow]);
 
@@ -38,7 +43,7 @@ export function RoundClock({
         <span className="mono-tag text-[var(--ink-soft)]">room clock</span>
         <motion.span
           key={seconds}
-          initial={urgent ? { scale: 1.35 } : false}
+          initial={urgent && !shouldReduceMotion ? { scale: 1.35 } : false}
           animate={{ scale: 1 }}
           className="display text-2xl tabular-nums"
           style={{ color: urgent ? "var(--red)" : "var(--ink)" }}
@@ -52,7 +57,11 @@ export function RoundClock({
             className="h-full bg-[var(--red)]"
             animate={{ scaleX: progress }}
             style={{ transformOrigin: "left" }}
-            transition={{ ease: "linear", duration: 0.1 }}
+            transition={
+              shouldReduceMotion
+                ? { duration: 0 }
+                : { ease: "linear", duration: TICK_MS / 1000 }
+            }
           />
         </div>
       )}

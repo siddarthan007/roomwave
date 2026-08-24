@@ -23,6 +23,9 @@ const EVENT_NAMES: RoomEvent["type"][] = [
 /**
  * SSE room stream. On reconnect the server re-sends a fresh canonical
  * snapshot first, so clients never depend on event replay for correctness.
+ * The last seen server sequence is echoed back via `?after=` so the server
+ * can also replay the events missed while the socket was down (best effort —
+ * gaps older than the replay window are covered by the snapshot alone).
  */
 export function useRoomStream(
   roomId: string,
@@ -30,6 +33,7 @@ export function useRoomStream(
   enabled = true,
 ): ConnectionState {
   const callbackRef = useRef(onEvent);
+  const lastEventIdRef = useRef(0);
   const [connection, setConnection] = useState<{
     roomId: string;
     state: ConnectionState;
@@ -49,7 +53,13 @@ export function useRoomStream(
 
     const connect = () => {
       if (stopped) return;
-      source = new EventSource(apiUrl(`/api/rooms/${roomId}/events`));
+      const after = lastEventIdRef.current;
+      const url = apiUrl(
+        after > 0
+          ? `/api/rooms/${roomId}/events?after=${after}`
+          : `/api/rooms/${roomId}/events`,
+      );
+      source = new EventSource(url);
 
       source.onopen = () => {
         retryDelay = 1_000;
@@ -67,6 +77,10 @@ export function useRoomStream(
       for (const name of EVENT_NAMES) {
         source.addEventListener(name, (rawEvent) => {
           const message = rawEvent as MessageEvent;
+          const parsedId = Number.parseInt(message.lastEventId ?? "", 10);
+          if (Number.isFinite(parsedId)) {
+            lastEventIdRef.current = parsedId;
+          }
           try {
             callbackRef.current(JSON.parse(message.data) as RoomEvent);
           } catch (error) {

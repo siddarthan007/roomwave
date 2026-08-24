@@ -4,7 +4,7 @@ import type {
   RoomState,
 } from "@roomwave/shared";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useRoomStream } from "./use-room-stream";
 import { getRoomState } from "../lib/api";
@@ -19,39 +19,41 @@ export function useRoom(roomId: string) {
   const [burst, setBurst] = useState<ReactionBurst | null>(null);
   const [arrival, setArrival] = useState(0);
   const [error, setError] = useState("");
+  // Only the newest snapshot request may land: rapid activity.started →
+  // activity.state events would otherwise resolve out of order and briefly
+  // revert the visible phase with a stale snapshot.
+  const fetchSeq = useRef(0);
+  const mountedRef = useRef(true);
+
+  const refresh = useCallback(() => {
+    if (!roomId) return Promise.resolve();
+    const seq = ++fetchSeq.current;
+    return getRoomState(roomId)
+      .then((next) => {
+        if (!mountedRef.current || seq !== fetchSeq.current) return;
+        setError("");
+        setState(next);
+      })
+      .catch((caught) => {
+        if (!mountedRef.current || seq !== fetchSeq.current) return;
+        setError(caught instanceof Error ? caught.message : "Room unavailable.");
+      });
+  }, [roomId]);
 
   useEffect(() => {
-    if (!roomId) return;
-    let active = true;
-    const refresh = () =>
-      getRoomState(roomId)
-        .then((next) => {
-          if (active) {
-            setError("");
-            setState(next);
-          }
-        })
-        .catch((caught) => {
-          if (active) {
-            setError(
-              caught instanceof Error ? caught.message : "Room unavailable.",
-            );
-          }
-        });
+    mountedRef.current = true;
     void refresh();
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh();
     };
-    const timer = window.setInterval(() => void refresh(), 15_000);
     window.addEventListener("focus", onVisible);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      active = false;
-      window.clearInterval(timer);
+      mountedRef.current = false;
       window.removeEventListener("focus", onVisible);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [roomId]);
+  }, [refresh]);
 
   const handleEvent = useCallback(
     (event: RoomEvent) => {
@@ -80,7 +82,7 @@ export function useRoom(roomId: string) {
         case "activity.started":
         case "activity.state":
           // Structural change: pull a fresh authoritative snapshot.
-          void getRoomState(roomId).then(setState).catch(() => null);
+          void refresh();
           break;
 
         case "participant.count":
@@ -109,7 +111,7 @@ export function useRoom(roomId: string) {
           break;
       }
     },
-    [roomId],
+    [refresh],
   );
 
   const connection = useRoomStream(
@@ -117,6 +119,16 @@ export function useRoom(roomId: string) {
     handleEvent,
     Boolean(state && state.room.id === roomId),
   );
+
+  // Safety-net polling only while the live stream is NOT healthy: while SSE
+  // is connected a poll could interleave a stale HTTP snapshot between fresh
+  // patches. The boolean keeps this effect from restarting on every patch.
+  const streamReady = Boolean(state && state.room.id === roomId);
+  useEffect(() => {
+    if (!roomId || !streamReady || connection === "connected") return;
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [connection, refresh, roomId, streamReady]);
 
   return { state, setState, burst, arrival, connection, error };
 }

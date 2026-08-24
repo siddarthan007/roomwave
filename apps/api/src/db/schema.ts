@@ -51,7 +51,9 @@ export const rooms = sqliteTable(
   ],
 );
 
-export const activities = sqliteTable("activities", {
+export const activities = sqliteTable(
+  "activities",
+  {
   id: text("id").primaryKey(),
 
   roomId: text("room_id")
@@ -83,7 +85,9 @@ export const activities = sqliteTable("activities", {
   deadlineAt: text("deadline_at"),
 
   createdAt: text("created_at").notNull(),
-});
+  },
+  (table) => [index("activities_room_id_index").on(table.roomId)],
+);
 
 export const participants = sqliteTable(
   "participants",
@@ -108,6 +112,8 @@ export const participants = sqliteTable(
     uniqueIndex("participants_token_unique").on(
       table.tokenHash,
     ),
+  
+    index("participants_room_id_index").on(table.roomId),
   ],
 );
 
@@ -144,5 +150,6 @@ export const responses = sqliteTable(
       table.activityId,
       table.updatedAt,
     ),
+    index("responses_participant_id_index").on(table.participantId),
   ],
 );

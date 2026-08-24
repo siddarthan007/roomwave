@@ -104,7 +104,22 @@ export function PresenterPage() {
       }
       setState(await getRoomState(roomId));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Launch failed.");
+      // A queue entry built from an unfinished composer form can be
+      // rejected by the server; surface the field-level zod message and
+      // drop the broken entry so the show can go on.
+      setError(
+        caught instanceof Error ? caught.message : "Launch failed.",
+      );
+      const remaining = playlist.filter((entry) => entry.id !== nextEntry.id);
+      setPlaylist(remaining);
+      try {
+        localStorage.setItem(
+          `roomwave:playlist:${roomId}`,
+          JSON.stringify(remaining),
+        );
+      } catch {
+        // storage unavailable
+      }
     } finally {
       setBusy(false);
     }

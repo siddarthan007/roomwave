@@ -26,6 +26,16 @@ const EVENT_NAMES: RoomEvent["type"][] = [
  * The last seen server sequence is echoed back via `?after=` so the server
  * can also replay the events missed while the socket was down (best effort —
  * gaps older than the replay window are covered by the snapshot alone).
+ *
+ * Liveness hardening:
+ *  - watchdog timer: if no SSE event (heartbeat included) arrives within
+ *    HEARTBEAT_TIMEOUT, force-reconnect. Catches half-open connections where
+ *    the socket looks alive but events silently stop (NAT drops, proxy idle
+ *    eviction). This is the main cause of "updates only arrive after a tab
+ *    switch".
+ *  - visibilitychange: browsers throttle timers in background tabs and may
+ *    suspend the connection; on return to foreground we reconnect immediately
+ *    (with ?after= replay) instead of waiting out the backoff timer.
  */
 export function useRoomStream(
   roomId: string,
@@ -49,7 +59,24 @@ export function useRoomStream(
     let stopped = false;
     let source: EventSource | null = null;
     let retryTimer: number | null = null;
+    let watchdogTimer: number | null = null;
     let retryDelay = 1_000;
+
+    // Server heartbeats every 5s. Two intervals of silence means the pipe is
+    // dead even if the socket has not errored yet.
+    const HEARTBEAT_TIMEOUT_MS = 11_000;
+
+    const armWatchdog = () => {
+      if (watchdogTimer !== null) window.clearTimeout(watchdogTimer);
+      watchdogTimer = window.setTimeout(() => {
+        if (stopped) return;
+        // Half-open connection: close and reconnect with replay.
+        source?.close();
+        source = null;
+        setConnection({ roomId, state: "reconnecting" });
+        connect();
+      }, HEARTBEAT_TIMEOUT_MS);
+    };
 
     const connect = () => {
       if (stopped) return;
@@ -63,11 +90,13 @@ export function useRoomStream(
 
       source.onopen = () => {
         retryDelay = 1_000;
+        armWatchdog();
         setConnection({ roomId, state: "connected" });
       };
       source.onerror = () => {
         source?.close();
         source = null;
+        if (watchdogTimer !== null) window.clearTimeout(watchdogTimer);
         if (stopped) return;
         setConnection({ roomId, state: "reconnecting" });
         retryTimer = window.setTimeout(connect, retryDelay);
@@ -81,6 +110,7 @@ export function useRoomStream(
           if (Number.isFinite(parsedId)) {
             lastEventIdRef.current = parsedId;
           }
+          armWatchdog();
           try {
             callbackRef.current(JSON.parse(message.data) as RoomEvent);
           } catch (error) {
@@ -92,10 +122,23 @@ export function useRoomStream(
 
     connect();
 
+    // Returning to the tab: timers were throttled, the connection may have
+    // died silently. Reconnect right away; ?after= replays what was missed.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || stopped) return;
+      if (!source || source.readyState === EventSource.CLOSED) {
+        if (retryTimer !== null) window.clearTimeout(retryTimer);
+        connect();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       stopped = true;
       source?.close();
       if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (watchdogTimer !== null) window.clearTimeout(watchdogTimer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [enabled, roomId]);
 

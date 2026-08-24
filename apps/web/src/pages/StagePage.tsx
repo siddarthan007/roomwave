@@ -106,6 +106,11 @@ export function StagePage() {
     >
       <div aria-hidden="true" className="halftone absolute inset-0" />
 
+      {/* Festival-poster ghost type: the code IS the poster. */}
+      <div aria-hidden="true" className="rw-ghost display">
+        {state.room.code}
+      </div>
+
       {state.room.settings.allowReactions && <ReactionLayer burst={burst} />}
 
       {/* Minimal room chrome in the top corners. */}
@@ -123,10 +128,13 @@ export function StagePage() {
           </div>
           {activity && (
             <>
-              <span
-                className="inline-block border-2 border-[var(--ink)] px-4 py-1
-                  text-sm font-black uppercase tracking-widest"
+              <motion.span
+                key={activity.state}
+                initial={shouldReduceMotion ? false : { scaleX: 0.4, opacity: 0 }}
+                animate={{ scaleX: 1, opacity: 1 }}
+                transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
                 style={{
+                  transformOrigin: "left",
                   background:
                     activity.state === "live"
                       ? "var(--green)"
@@ -142,7 +150,7 @@ export function StagePage() {
                 }}
               >
                 {finalResultVisible ? "FINAL" : PHASE_COPY[activity.state]}
-              </span>
+              </motion.span>
               {showLiveCount && (
                 <ArrivalCounter value={state.responseCount} />
               )}
@@ -171,6 +179,9 @@ export function StagePage() {
             <p className="mx-auto mt-4 max-w-2xl text-lg font-bold text-[var(--ink-soft)]">
               {state.room.settings.lobbyMessage}
             </p>
+            <div className="mx-auto mt-6 max-w-md">
+              <div className="rw-ribbon" aria-hidden="true" />
+            </div>
             <Headline size="xl">
               Join the<br />room now
             </Headline>

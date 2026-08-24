@@ -340,6 +340,39 @@ button:disabled {
   );
 }
 
+/* Ghost poster type: the room code at festival-poster scale, cropped by the
+   viewport edge like a printed broadsheet. Outlined stroke keeps it present
+   but behind every surface (purpose, R-31: scale cue that makes the projector
+   view feel like THE event, not a webpage). Decorative only: aria-hidden,
+   pointer-events none, no interaction, never animates. */
+.rw-ghost {
+  pointer-events: none;
+  user-select: none;
+  position: absolute;
+  top: -0.22em;
+  right: -0.08em;
+  z-index: 0;
+  max-width: 90vw;
+  font-size: clamp(11rem, 36vw, 34rem);
+  line-height: 0.78;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+  color: transparent;
+  -webkit-text-stroke: 3px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+/* Scoreboard ribbon: one loud stripe device marking the lobby's action line.
+   Echoes the ticket tear-line motif (identity device, used once per screen). */
+.rw-ribbon {
+  height: 12px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--red) 0 14px,
+    var(--paper) 14px 26px
+  );
+  border-block: 2px solid var(--ink);
+}
+
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 34px;

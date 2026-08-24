@@ -47,6 +47,15 @@
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+
+  /* Motion tokens: strong custom curves. ease-out-strong for anything
+     entering/exiting, ease-inout-strong for on-screen movement. Durations
+     stay under 300ms for UI; stage explanatory moments may run longer. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-inout-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-fast: 150ms;
+  --dur-ui: 250ms;
+  --dur-stage: 450ms;
 }
 
 * {
@@ -254,7 +263,7 @@ button:disabled {
 /* Reveal choreography: result content enters with a decisive upward stamp.
    Applied to the stage result wrapper; children stagger via --rw-i index. */
 .rw-reveal-stamp > * {
-  animation: rw-stamp-in 0.42s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  animation: rw-stamp-in var(--dur-stage) var(--ease-out-strong) both;
   animation-delay: calc(var(--rw-i, 0) * 70ms);
 }
 

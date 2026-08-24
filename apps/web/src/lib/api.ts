@@ -86,8 +86,8 @@ export function touchPresence(roomId: string, participantToken: string) {
   });
 }
 
-export function getRoomState(roomId: string) {
-  return request<RoomState>(`/api/rooms/${roomId}/state`);
+export function getRoomState(roomId: string, init?: RequestInit) {
+  return request<RoomState>(`/api/rooms/${roomId}/state`, init);
 }
 
 export type CreateActivityPayload = CreateActivityInput;

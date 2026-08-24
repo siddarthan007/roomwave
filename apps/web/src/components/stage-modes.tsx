@@ -2,6 +2,7 @@ import type {
   Activity,
   ActivityAggregate,
 } from "@roomwave/shared";
+import { AnimatedStat } from "./AnimatedStat";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { scaleLinear } from "d3-scale";
@@ -81,10 +82,11 @@ export function PulseChoiceStage({
             <span className="text-2xl font-bold md:text-3xl">
               {row.label}
             </span>
-            <span className="display text-4xl tabular-nums md:text-5xl">
-              {Math.round(row.percentage)}
-              <span className="text-xl">%</span>
-            </span>
+            <AnimatedStat
+              value={Math.round(row.percentage)}
+              suffix="%"
+              className="display inline-flex items-baseline gap-[0.1em] text-4xl md:text-5xl"
+            />
           </div>
 
           <div className="relative h-10 border-2 border-[var(--ink)] bg-[var(--paper-deep)] md:h-12">
@@ -126,9 +128,10 @@ export function PulseChoiceStage({
               className="h-full bg-[var(--ink)]"
             />
           </div>
-          <span className="display text-3xl tabular-nums">
-            {aggregate.consensus}
-          </span>
+          <AnimatedStat
+            value={aggregate.consensus}
+            className="display text-3xl"
+          />
         </div>
       )}
     </div>
@@ -202,7 +205,7 @@ export function SpectrumStage({
 
       <div className="mt-10 flex items-end justify-between gap-6">
         <Stat label="room median">
-          {values.length > 0 ? String(Math.round(median! / 10)) : "waiting"}
+          {values.length > 0 ? <AnimatedStat value={Math.round(median! / 10)} /> : "waiting"}
         </Stat>
         <Stat label="spread">
           {values.length < 2
@@ -236,6 +239,7 @@ export function WordBloomStage({
 }: {
   aggregate: Extract<ActivityAggregate, { type: "word-bloom" }> | null;
 }) {
+  const reduceMotion = useReducedMotion();
   const terms = aggregate?.terms ?? [];
   const max = Math.max(1, ...terms.map((term) => term.count));
 
@@ -254,7 +258,9 @@ export function WordBloomStage({
             <motion.div
               layout
               key={term.text}
-              initial={{ scale: 0.25, opacity: 0, rotate: -8 }}
+              initial={
+                reduceMotion ? false : { scale: 0.92, opacity: 0, rotate: -8 }
+              }
               animate={{
                 scale: 1,
                 opacity: 1,
@@ -398,6 +404,7 @@ export function PredictionStage({
   activity: Activity;
   aggregate: Extract<ActivityAggregate, { type: "prediction" }> | null;
 }) {
+  const reduceMotion = useReducedMotion();
   const config = activity.config as Extract<
     Activity["config"],
     { type: "prediction" }
@@ -419,7 +426,9 @@ export function PredictionStage({
         {values.map((value, index) => (
           <motion.span
             key={`${index}-${value}`}
-            initial={{ scale: 0, y: -60, opacity: 0 }}
+            initial={
+              reduceMotion ? false : { scale: 0.94, y: -24, opacity: 0 }
+            }
             animate={{ scale: 1, y: 0, opacity: 1 }}
             transition={{ delay: Math.min(index * 0.03, 0.5), type: "spring", stiffness: 260, damping: 16 }}
             className="absolute top-4 h-4 w-4 border-2 border-[var(--ink)]"

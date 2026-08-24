@@ -157,7 +157,7 @@ export function LivingConsensusStage({
               fill={index % 3 === 0 ? "var(--red)" : index % 3 === 1 ? "var(--blue)" : "var(--yellow)"}
               stroke="var(--ink)"
               strokeWidth="2"
-              initial={reduceMotion ? false : { scale: 0, opacity: 0 }}
+              initial={reduceMotion ? false : { scale: 0.94, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: reduceMotion ? 0 : Math.min(index * 0.008, 0.5) }}
             />

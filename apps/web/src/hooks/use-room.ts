@@ -28,7 +28,7 @@ export function useRoom(roomId: string) {
   const refresh = useCallback(() => {
     if (!roomId) return Promise.resolve();
     const seq = ++fetchSeq.current;
-    return getRoomState(roomId)
+    return getRoomState(roomId, { signal: AbortSignal.timeout(5_000) })
       .then((next) => {
         if (!mountedRef.current || seq !== fetchSeq.current) return;
         setError("");

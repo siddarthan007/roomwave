@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import QRCode from "qrcode";
+import NumberFlow from "@number-flow/react";
 
 import { useRoom } from "../hooks/use-room";
 import {
@@ -30,15 +31,16 @@ const PHASE_COPY: Record<ActivityState, string> = {
 
 /** Oversized counter that kicks on every arriving response. */
 function ArrivalCounter({ value }: { value: number }) {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <motion.p
       key={value}
-      initial={value === 0 ? false : { scale: 1.18, color: "var(--red)" }}
+      initial={shouldReduceMotion ? false : { scale: 1.18, color: "var(--red)" }}
       animate={{ scale: 1, color: "var(--ink)" }}
       transition={{ type: "spring", stiffness: 400, damping: 15 }}
-      className="stage-arrival display mt-3 text-6xl tabular-nums md:text-7xl"
+      className="stage-arrival display mt-3 text-6xl md:text-7xl"
     >
-      {value}
+      <NumberFlow value={value} willChange />
     </motion.p>
   );
 }
@@ -214,7 +216,7 @@ export function StagePage() {
             key={activity.id}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.2, 0.9, 0.2, 1] }}
+            transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
             className="stage-question display max-w-5xl break-words text-4xl leading-[0.95] sm:text-5xl md:text-7xl"
           >
             {activity.prompt}

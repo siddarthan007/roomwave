@@ -14,3 +14,4 @@ apps/api/data/*.sqlite-wal
 
 # Unused binary from the original Vite scaffold.
 apps/web/src/assets/hero.png
+.hermes-*.py

@@ -7,12 +7,16 @@
    Not glass, not glow, not gradients.
 --------------------------------------------------------------------------- */
 
+/* Archivo variable (latin subset, wght 100-900 / wdth 62-125), self-hosted
+   so first paint never blocks on a third party. One file serves both
+   roles: body at normal width, display expanded to 125% for the poster
+   voice. The width axis IS the maximalist move — weight alone reads as a
+   bold webpage, width reads as a printed broadsheet. */
 @font-face {
-  /* Self-hosted variable display face is avoided on purpose: we use a
-     system-adjacent condensed stack so first paint needs zero font bytes,
-     and the identity comes from weight/width/case, not the family. */
-  font-family: "Roomwave Display";
-  src: local("Archivo Black"), local("Arial Black"), local("Impact");
+  font-family: "Archivo";
+  src: url("/fonts/archivo-var.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
   font-display: swap;
 }
 
@@ -233,11 +237,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* Display type: oversized, tight, uppercase where it counts. */
+/* Display type: oversized, tight, uppercase where it counts.
+   font-stretch 125% is the poster voice; falls back gracefully on the
+   rare engine without variable-font support (weight still applies). */
 .display {
-  font-family: "Roomwave Display", "Archivo Black", "Arial Black", Impact, sans-serif;
+  font-family: "Archivo", "Arial Black", Impact, sans-serif;
   font-weight: 900;
-  letter-spacing: -0.03em;
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
   line-height: 0.95;
   text-transform: uppercase;
 }

@@ -179,9 +179,6 @@ export function StagePage() {
             <p className="mx-auto mt-4 max-w-2xl text-lg font-bold text-[var(--ink-soft)]">
               {state.room.settings.lobbyMessage}
             </p>
-            <div className="mx-auto mt-6 max-w-md">
-              <div className="rw-ribbon" aria-hidden="true" />
-            </div>
             <Headline size="xl">
               Join the<br />room now
             </Headline>

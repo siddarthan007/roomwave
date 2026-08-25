@@ -361,18 +361,6 @@ button:disabled {
   -webkit-text-stroke: 3px color-mix(in srgb, var(--ink) 16%, transparent);
 }
 
-/* Scoreboard ribbon: one loud stripe device marking the lobby's action line.
-   Echoes the ticket tear-line motif (identity device, used once per screen). */
-.rw-ribbon {
-  height: 12px;
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--red) 0 14px,
-    var(--paper) 14px 26px
-  );
-  border-block: 2px solid var(--ink);
-}
-
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 34px;

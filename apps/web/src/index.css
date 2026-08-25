@@ -361,6 +361,12 @@ button:disabled {
   -webkit-text-stroke: 3px color-mix(in srgb, var(--ink) 16%, transparent);
 }
 
+@media (max-width: 639px) {
+  .rw-ghost {
+    display: none;
+  }
+}
+
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 34px;

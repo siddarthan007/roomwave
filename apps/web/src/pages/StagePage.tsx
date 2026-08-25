@@ -106,7 +106,7 @@ export function StagePage() {
     >
       <div aria-hidden="true" className="halftone absolute inset-0" />
 
-      {/* Festival-poster ghost type: the code IS the poster. */}
+      {/* The room code IS the poster. */}
       <div aria-hidden="true" className="rw-ghost display">
         {state.room.code}
       </div>

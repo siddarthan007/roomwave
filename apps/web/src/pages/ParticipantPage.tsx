@@ -241,7 +241,8 @@ export function ParticipantPage() {
         aria-label="Reactions"
         className="fixed inset-x-0 bottom-0 z-20 mx-auto flex max-w-md
           items-center justify-around border-t-2 border-[var(--ink)]
-          bg-[var(--paper)] px-4 py-3"
+          bg-[var(--paper)] px-4 pt-3"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
         {REACTIONS.map((reaction) => (
           <button

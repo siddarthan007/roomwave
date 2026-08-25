@@ -16,7 +16,9 @@ export function SoundToggle({ mode }: { mode: RoomSoundMode }) {
         setEnabled(next);
         setSoundEnabled(next, mode);
       }}
-      className="mono-tag min-h-10 border-2 border-[var(--ink)] bg-[var(--paper)] px-3 block-shadow-sm"
+      className="mono-tag min-h-10 border-2 border-[var(--ink)] px-3
+        transition-transform active:translate-x-[2px] active:translate-y-[2px]
+        active:shadow-none block-shadow-sm"
     >
       sound {enabled ? "on" : "off"}
     </button>

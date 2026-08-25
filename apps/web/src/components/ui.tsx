@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import NumberFlow from "@number-flow/react";
+
 import { onSurface } from "./surface-color";
 
 /**
@@ -110,7 +112,8 @@ export function Field({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className="w-full border-2 border-[var(--ink)] bg-[var(--paper)] px-4
-          py-3 text-lg outline-none placeholder:text-[var(--ink-soft)]/50"
+          py-3 text-lg transition-shadow placeholder:text-[var(--ink-soft)]/50
+          focus:shadow-[4px_4px_0_var(--ink)] focus:outline-none"
       />
     </label>
   );
@@ -119,7 +122,9 @@ export function Field({
 /** Oversized rolling count numeral. */
 export function CountRoll({ value }: { value: number }) {
   return (
-    <span className="display text-5xl tabular-nums md:text-6xl">{value}</span>
+    <span className="display text-5xl tabular-nums md:text-6xl">
+      <NumberFlow value={value} willChange />
+    </span>
   );
 }
 

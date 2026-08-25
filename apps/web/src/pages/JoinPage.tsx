@@ -80,8 +80,12 @@ export function JoinPage() {
       <div className="mt-8 grid grid-cols-[auto_1fr] items-end gap-4">
         <button
           type="button"
-          onClick={() => setAvatarSeed(randomAvatarSeed())}
-          className="group text-left"
+          onClick={() => {
+            navigator.vibrate?.(10);
+            setAvatarSeed(randomAvatarSeed());
+          }}
+          className="group text-left transition-transform
+            active:translate-y-[2px] active:scale-[0.97]"
           aria-label="Shuffle character"
         >
           <PixelAvatar seed={avatarSeed} size={66} />

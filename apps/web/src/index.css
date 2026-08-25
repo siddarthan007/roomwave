@@ -52,6 +52,20 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 
+  /* High-voltage accents: used ONLY at the key moment (status inversion,
+   active tape, stamped badges). Never page-wide — R-29/R-13 dose caps. */
+  --acid: #f4f800;
+  --cobalt: #0038ff;
+  --signal: #ff3b00;
+  --slime: #00e05c;
+
+/* High-voltage accents: used ONLY at the key moment (status inversion,
+   active tape, stamped badges). Never page-wide — R-29/R-13 dose caps. */
+  --acid: #f4f800;
+  --cobalt: #0038ff;
+  --signal: #ff3b00;
+  --slime: #00e05c;
+
   /* Motion tokens: strong custom curves. ease-out-strong for anything
      entering/exiting, ease-inout-strong for on-screen movement. Durations
      stay under 300ms for UI; stage explanatory moments may run longer. */
@@ -459,4 +473,55 @@ input[type="range"]::-moz-range-thumb {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Maximalist component recipes (curated set).
+   Mechanical press = physical switch feel; sticker stamp = off-grid state
+   flag. Motion respects reduced-motion. Purposes per R-31.
+--------------------------------------------------------------------------- */
+
+/* Mechanical press-plate: hover elevates, active collapses into the page.
+   The 0.08s overshoot curve is the spring-loaded switch snap (asymmetric
+   easing per AUDIT.md §4). */
+.press-plate {
+  transition:
+    transform 0.08s cubic-bezier(0.2, 0.9, 0.3, 1.2),
+    box-shadow 0.08s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .press-plate:hover:not(:disabled) {
+    transform: translate(-2px, -2px) rotate(-0.4deg);
+    box-shadow: 8px 8px 0 var(--ink);
+  }
+}
+
+.press-plate:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+/* Sticker stamp: rotated high-contrast label slapped over card corners.
+   Deliberately off-grid; -4deg reads as hand-applied, not layout error. */
+.sticker {
+  display: inline-block;
+  border: 3px solid var(--ink);
+  padding: 0.15rem 0.55rem;
+  background: var(--acid);
+  color: var(--ink);
+  font-family: "Archivo", "Inter", Arial, sans-serif;
+  font-weight: 900;
+  font-stretch: 110%;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: rotate(-4deg);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.sticker.is-signal {
+  background: var(--signal);
+  color: #fff;
 }

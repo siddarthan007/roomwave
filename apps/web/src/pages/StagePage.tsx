@@ -45,6 +45,31 @@ function ArrivalCounter({ value }: { value: number }) {
   );
 }
 
+
+
+
+
+const STAGE_GLYPHS: Record<string, string> = {
+  "pulse-choice": "%",
+  spectrum: "|",
+  "word-bloom": '"',
+  prediction: "^",
+  "hot-take": "_",
+  "signal-noise": "~",
+};
+
+function StageWatermark({ glyph }: { glyph: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="rw-watermark display pointer-events-none absolute select-none"
+      style={{ right: "-0.06em", bottom: "-0.18em" }}
+    >
+      {glyph}
+    </span>
+  );
+}
+
 export function StagePage() {
   const { roomId } = useParams();
   const { state, burst, connection, error } = useRoom(roomId ?? "");
@@ -255,7 +280,12 @@ export function StagePage() {
             />
           </div>
 
-          <div className="stage-result mt-10">
+          <div className="stage-result relative mt-10">
+            {activity && (
+              <StageWatermark
+                glyph={STAGE_GLYPHS[activity.config.type] ?? "+"}
+              />
+            )}
             <AnimatePresence mode="wait" initial={false}>
               {activity.config.resultsMode === "blind" &&
               activity.state !== "revealed" ? (

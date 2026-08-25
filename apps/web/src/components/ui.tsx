@@ -62,16 +62,26 @@ export function BlockButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`block-shadow-sm border-2 border-[var(--ink)] px-6 py-3 text-lg
-        font-bold uppercase tracking-wide transition-transform
-        active:translate-x-[3px] active:translate-y-[3px]
-        active:shadow-none disabled:opacity-40 ${wide ? "w-full" : ""}`}
+      className={`press-plate block-shadow-sm border-2 border-[var(--ink)] px-6 py-3 text-lg
+        font-bold uppercase tracking-wide
+        disabled:relative disabled:isolate ${wide ? "w-full" : ""}`}
       style={{
         background: color,
         color: textColor ?? onSurface(color),
       }}
     >
-      {children}
+      {/* Disabled reads as OFF-LINE (striped plate), not faded out. */}
+      {disabled && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-90"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(-45deg, transparent 0 8px, rgba(23,21,15,0.14) 8px 16px)",
+          }}
+        />
+      )}
+      <span className="relative">{children}</span>
     </button>
   );
 }

@@ -40,6 +40,7 @@ import {
   RealityBenderInput,
   ShadowCouncilInput,
 } from "./signature-participant-modes";
+import { ChipStackInput, FistFiveInput, OverUnderInput } from "./arcade-modes";
 
 type CommonProps = CommonModeInputProps;
 const useSubmit = useModeSubmit;
@@ -248,7 +249,7 @@ export function PredictionInput({
           placeholder={`${config.min} to ${config.max}`}
           aria-label={`Your guess in ${config.unit}`}
           className="display block-shadow-sm w-full border-2 border-[var(--ink)]
-            bg-white px-4 py-4 text-5xl outline-none"
+            bg-white px-4 py-4 text-5xl"
         />
         <span className="display pb-4 text-3xl text-[var(--ink-soft)]">
           {config.unit}
@@ -312,7 +313,7 @@ export function WordBloomInput({ activity, token }: CommonProps) {
           maxLength={config.maxChars}
           onChange={(event) => setText(event.target.value)}
           placeholder="What belongs in the bloom?"
-          className="block-shadow-sm w-full border-2 border-[var(--ink)] bg-white px-4 py-4 text-xl outline-none"
+          className="block-shadow-sm min-h-12 w-full border-2 border-[var(--ink)] bg-white px-4 py-4 text-xl"
         />
         <span className="mono-tag mt-2 block text-right text-[var(--ink-soft)]">
           {text.length}/{config.maxChars}
@@ -716,7 +717,7 @@ export function QuestionBoardInput({ activity, token, aggregate }: CommonProps) 
           rows={3}
           onChange={(event) => setText(event.target.value)}
           placeholder="Ask what the room needs to hear…"
-          className="block-shadow-sm w-full resize-none border-2 border-[var(--ink)] bg-white p-4 text-lg outline-none"
+          className="block-shadow-sm w-full resize-none border-2 border-[var(--ink)] bg-white p-4 text-lg"
         />
         <div className="flex items-center justify-between gap-4">
           <span className="mono-tag text-[var(--ink-soft)]">{text.length}/{config.maxChars}</span>
@@ -937,6 +938,12 @@ export function ModeParticipantInput(props: CommonProps) {
       return <CipherRoomInput {...props} />;
     case "shadow-council":
       return <ShadowCouncilInput {...props} />;
+    case "chip-stack":
+      return <ChipStackInput {...props} />;
+    case "over-under":
+      return <OverUnderInput {...props} />;
+    case "fist-five":
+      return <FistFiveInput {...props} />;
     default:
       return null;
   }

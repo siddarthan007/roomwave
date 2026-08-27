@@ -1,5 +1,5 @@
 import type { ActivityState, ActivityType, RoomSettings } from "@roomwave/shared";
-import { activityRequiresReveal } from "@roomwave/shared";
+import { activityRequiresReveal, ROOM_THEMES, timedRoundSeconds } from "@roomwave/shared";
 
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -19,6 +19,7 @@ import {
   type ModerationItem,
 } from "../lib/api";
 import { getHostToken } from "../lib/storage";
+import { copyText } from "../lib/clipboard";
 import {
   loadPlaylist,
   makePlaylistEntry,
@@ -33,6 +34,7 @@ import {
 } from "../components/ui";
 import { onSurface } from "../components/surface-color";
 import { PixelAvatar } from "../components/PixelAvatar";
+import { ReactionLayer } from "../components/ReactionLayer";
 import { RoundClock } from "../components/RoundClock";
 import { SoundToggle } from "../components/SoundToggle";
 import { playRoomSound } from "../lib/sound";
@@ -56,6 +58,12 @@ const MODES: {
     label: "Spectrum",
     tagline: "The room places itself on a rail",
     color: "var(--blue)",
+  },
+  {
+    type: "fist-five",
+    label: "Fist Five",
+    tagline: "Hold up a number. The room shows its hands.",
+    color: "var(--green)",
   },
   {
     type: "prediction",
@@ -141,12 +149,25 @@ const MODES: {
     tagline: "Allocate suspicion and seal a tribunal",
     color: "var(--red)",
   },
+  {
+    type: "chip-stack",
+    label: "Chip Stack",
+    tagline: "Spend a fixed chip budget across the options",
+    color: "var(--orange)",
+  },
+  {
+    type: "over-under",
+    label: "Over / Under",
+    tagline: "Bet the room against a published line",
+    color: "var(--yellow)",
+  },
 ];
 
 const GAME_TYPES = new Set<ActivityType>([
   "signal-noise",
   "cipher-room",
   "shadow-council",
+  "over-under",
 ]);
 
 const FORCED_BLIND_TYPES = new Set<ActivityType>([
@@ -169,6 +190,9 @@ function lockActionLabel(type: ActivityType) {
   if (type === "future-fork") return "close forecasts";
   if (type === "shadow-council") return "close tribunal";
   if (type === "cipher-room") return "close guesses";
+  if (type === "chip-stack") return "close the stacks";
+  if (type === "over-under") return "close the line";
+  if (type === "fist-five") return "close the hands";
   return "lock answers";
 }
 
@@ -179,6 +203,9 @@ function revealActionLabel(type: ActivityType) {
   if (type === "future-fork") return "show the fork";
   if (type === "cipher-room") return "turn the wheel";
   if (type === "shadow-council") return "break the seal";
+  if (type === "over-under") return "show the number";
+  if (type === "chip-stack") return "reveal the stacks";
+  if (type === "fist-five") return "reveal the hands";
   return "reveal results";
 }
 
@@ -187,6 +214,33 @@ function reopenActionLabel(type: ActivityType) {
   if (type === "question-board") return "reopen board";
   if (GAME_TYPES.has(type)) return "restart clock";
   return "reopen answers";
+}
+
+type ModeOption = (typeof MODES)[number];
+
+function ModePickButton({
+  candidate,
+  selected,
+  onPick,
+}: {
+  candidate: ModeOption;
+  selected: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      className={`block-shadow-sm min-h-12 border-2 border-[var(--ink)] p-3 text-left transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none lg:p-4 ${selected ? "" : "opacity-60"}`}
+      style={{
+        background: selected ? candidate.color : "var(--paper)",
+        color: selected ? onSurface(candidate.color) : "var(--ink)",
+      }}
+    >
+      <p className="text-base font-black uppercase leading-tight lg:text-lg">{candidate.label}</p>
+      <p className="mt-1 hidden text-xs opacity-90 sm:block">{candidate.tagline}</p>
+    </button>
+  );
 }
 
 /** Host-side counter with the same arrival kick as the stage. */
@@ -206,7 +260,7 @@ function HostCounter({ value }: { value: number }) {
 
 export function HostPage() {
   const { roomId } = useParams();
-  const { state, setState, error: roomError } = useRoom(roomId ?? "");
+  const { state, setState, burst, error: roomError } = useRoom(roomId ?? "");
   const arrival = state?.responseCount ?? 0;
 
   const [mode, setMode] = useState<DraftType>("pulse-choice");
@@ -238,6 +292,8 @@ export function HostPage() {
   const [cipherClue, setCipherClue] = useState("Rotate the alphabet backward.");
   const [cipherShift, setCipherShift] = useState("3");
   const [shadowAliasIndex, setShadowAliasIndex] = useState("0");
+  const [chipsPerPerson, setChipsPerPerson] = useState("10");
+  const [lineValue, setLineValue] = useState("50");
   const [settingsDraft, setSettingsDraft] = useState<RoomSettings | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [moderationItems, setModerationItems] = useState<ModerationItem[]>([]);
@@ -279,6 +335,13 @@ export function HostPage() {
   const launchReady =
     Boolean(prompt.trim()) &&
     (mode !== "pulse-choice" || cleanedOptions.length >= 2) &&
+    (mode !== "chip-stack" ||
+      (cleanedOptions.length >= 2 &&
+        Number.isInteger(Number(chipsPerPerson)) &&
+        Number(chipsPerPerson) >= 3 &&
+        Number(chipsPerPerson) <= 20)) &&
+    (mode !== "over-under" ||
+      (Boolean(unit.trim()) && Number.isFinite(Number(lineValue)))) &&
     (mode !== "rank-race" || cleanedOptions.length >= 3) &&
     (mode !== "future-fork" ||
       (cleanedOptions.length >= 2 && Boolean(evidenceDrop.trim()))) &&
@@ -290,6 +353,7 @@ export function HostPage() {
         Boolean(evidenceDrop.trim()) &&
         validTimedRound)) &&
     (!(mode === "spectrum" ||
+      mode === "fist-five" ||
       mode === "hot-take" ||
       mode === "before-after" ||
       mode === "reality-bender" ||
@@ -509,6 +573,24 @@ export function HostPage() {
           timeLimitSeconds: numericTimeLimit,
           resultsMode: "blind",
         };
+      } else if (mode === "chip-stack") {
+        payload = {
+          type: mode,
+          prompt,
+          options: cleanedOptions,
+          chipsPerPerson: Number(chipsPerPerson),
+          resultsMode,
+        };
+      } else if (mode === "over-under") {
+        payload = {
+          type: mode,
+          prompt,
+          unit,
+          line: Number(lineValue),
+          actual: numericAnswer,
+          timeLimitSeconds: Number.isInteger(numericTimeLimit) ? numericTimeLimit : 0,
+          resultsMode,
+        };
       } else {
         payload = {
           type: mode,
@@ -575,9 +657,11 @@ export function HostPage() {
     if (!state) return;
     const url = `${window.location.origin}/join/${state.room.code}`;
     try {
-      await navigator.clipboard.writeText(
-        `Join ${state.room.title} on Roomwave: ${url}`,
-      );
+      const ok = await copyText(`Join ${state.room.title} on Roomwave: ${url}`);
+      if (!ok) {
+        setError("Could not copy the invite. Copy the room code instead.");
+        return;
+      }
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -624,7 +708,7 @@ export function HostPage() {
 
   if (!state) {
     return (
-      <main className="grid min-h-screen place-items-center px-6">
+      <main id="roomwave-main" className="grid min-h-dvh place-items-center px-6">
         {roomError ? (
           <div className="max-w-md space-y-5">
             <ErrorNote message={roomError} />
@@ -640,6 +724,48 @@ export function HostPage() {
   }
 
   const activity = state.activity;
+  const isHost = Boolean(getHostToken(roomId));
+  if (!isHost) {
+    return (
+      <main
+        id="roomwave-main"
+        className="safe-page safe-gutters page-pad mx-auto flex min-h-dvh max-w-md flex-col justify-center"
+        data-room-theme={state.room.settings.theme}
+      >
+        <Kicker color="var(--red)">this device is not the host</Kicker>
+        <p className="display mt-3 text-4xl">{state.room.title}</p>
+        <div className="mt-6">
+          <p className="mono-tag text-[var(--ink-soft)]">room code</p>
+          <button
+            type="button"
+            className="display mt-2 text-5xl"
+            onClick={() => void copyText(state.room.code)}
+            aria-label={`Copy room code ${state.room.code}`}
+          >
+            {state.room.code}
+          </button>
+        </div>
+        <p className="mt-6 text-lg text-[var(--ink-soft)]">
+          Host controls live on the device that opened this room. Open the stage, or join as a player.
+        </p>
+        <div className="mt-8 flex flex-col gap-3">
+          <Link
+            to={`/stage/${state.room.id}`}
+            className="block-shadow-sm border-2 border-[var(--ink)] bg-[var(--yellow)] px-6 py-3 text-center text-lg font-bold uppercase"
+          >
+            Open Stage
+          </Link>
+          <Link
+            to={`/join/${state.room.code}`}
+            className="border-2 border-[var(--ink)] bg-white px-6 py-3 text-center text-lg font-bold uppercase"
+          >
+            join as a player
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   const phase: ActivityState | null = activity?.state ?? null;
   const revealRequired = activity
     ? activityRequiresReveal(activity.config)
@@ -647,21 +773,32 @@ export function HostPage() {
 
   return (
     <main
-      className="safe-page safe-gutters safe-top mx-auto min-h-screen max-w-5xl px-5 py-10"
+      id="roomwave-main"
+      className="safe-page safe-gutters safe-top page-pad mx-auto min-h-dvh max-w-5xl"
       data-room-theme={state.room.settings.theme}
     >
-      <header className="flex flex-wrap items-start justify-between gap-6">
+      {state.room.settings.allowReactions && <ReactionLayer burst={burst} />}
+      <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:gap-6">
         <div>
           <Kicker color="var(--red)">host studio · {state.room.title}</Kicker>
           <Link
             to={`/stage/${state.room.id}`}
-            className="display sweep-underline mt-2 inline-block text-4xl"
+            className="display sweep-underline mt-2 inline-block text-3xl sm:text-4xl"
             data-active="true"
           >
-            Open Stage ↗
+            Open Stage
           </Link>
           <p className="mono-tag mt-3">
-            code {state.room.code} · {state.participantCount} joined · {state.onlineCount} online
+            <button
+              type="button"
+              onClick={() => void copyText(state.room.code)}
+              aria-label={`Copy room code ${state.room.code}`}
+              className="underline decoration-2 underline-offset-4"
+            >
+              code {state.room.code}
+            </button>
+            {" · "}
+            {state.participantCount} joined · {state.onlineCount} online
           </p>
           <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
             <button
@@ -748,12 +885,12 @@ export function HostPage() {
           <fieldset className="mt-6">
             <legend className="mono-tag text-[var(--ink-soft)]">stage palette</legend>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {(["paper", "signal", "midnight", "field"] as const).map((theme) => (
+              {ROOM_THEMES.map((theme) => (
                 <button
                   key={theme}
                   type="button"
                   onClick={() => setSettingsDraft({ ...settingsDraft, theme })}
-                  className={`theme-chip min-h-16 border-2 border-[var(--ink)] px-3 text-left font-black uppercase block-shadow-sm ${settingsDraft.theme === theme ? "is-active" : ""}`}
+                  className={`theme-chip min-h-16 border-2 border-[var(--ink)] px-3 text-left font-black uppercase block-shadow-sm ${settingsDraft.theme === theme || (theme === "arcade" && settingsDraft.theme === "midnight") ? "is-active" : ""}`}
                   data-preview-theme={theme}
                 >
                   {theme}
@@ -764,7 +901,7 @@ export function HostPage() {
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {([
-              ["allowReactions", "Reaction dock", "Let players send the live symbol swarm."],
+              ["allowReactions", "Reaction dock", "Let players stamp live reactions onto the stage."],
               ["allowLateJoin", "Late arrivals", "Let people enter while a round is already live."],
               ["showPresence", "Player parade", "Show room names and characters on host and stage."],
               ["showResponseCount", "Live answer count", "Show how many answers have landed before reveal."],
@@ -853,29 +990,38 @@ export function HostPage() {
               </ol>
             </div>
           )}
-          <Kicker>room modes</Kicker>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <Kicker>room modes</Kicker>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("pulse-choice");
+                setPrompt("How is this landing?");
+                setOptions(["Go", "Hold", "Stuck"]);
+                setChoiceRule("majority");
+                setResultsMode("live");
+              }}
+              className="mono-tag min-h-11 border-2 border-[var(--ink)] bg-[var(--yellow)] px-3 py-2"
+            >
+              fill Go / Hold / Stuck
+            </button>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
             {MODES.filter((candidate) => !GAME_TYPES.has(candidate.type)).map((candidate) => (
-              <button
+              <ModePickButton
                 key={candidate.type}
-                onClick={() => {
+                candidate={candidate}
+                selected={mode === candidate.type}
+                onPick={() => {
                   setMode(candidate.type);
                   if (ALWAYS_LIVE_TYPES.has(candidate.type)) setResultsMode("live");
                   if (FORCED_BLIND_TYPES.has(candidate.type)) setResultsMode("blind");
+                  if (candidate.type === "fist-five") {
+                    setLowLabel((current) => current.trim() || "Not yet");
+                    setHighLabel((current) => current.trim() || "Could teach it");
+                  }
                 }}
-                className={`block-shadow-sm border-2 border-[var(--ink)] p-4 text-left transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none ${mode === candidate.type ? "" : "opacity-60"}`}
-                style={{
-                  background:
-                    mode === candidate.type ? candidate.color : "var(--paper)",
-                  color:
-                    mode !== candidate.type
-                      ? "var(--ink)"
-                      : onSurface(candidate.color),
-                }}
-              >
-                <p className="text-lg font-black uppercase">{candidate.label}</p>
-                <p className="mt-1 text-xs opacity-90">{candidate.tagline}</p>
-              </button>
+              />
             ))}
           </div>
 
@@ -886,11 +1032,13 @@ export function HostPage() {
             </div>
             <span className="mono-tag text-[var(--ink-soft)]">fair play / sealed truth</span>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
             {MODES.filter((candidate) => GAME_TYPES.has(candidate.type)).map((candidate) => (
-              <button
+              <ModePickButton
                 key={candidate.type}
-                onClick={() => {
+                candidate={candidate}
+                selected={mode === candidate.type}
+                onPick={() => {
                   setMode(candidate.type);
                   setResultsMode("blind");
                   setTimeLimitSeconds(
@@ -898,21 +1046,12 @@ export function HostPage() {
                       ? "45"
                       : candidate.type === "shadow-council"
                         ? "60"
+                        : candidate.type === "over-under"
+                          ? "30"
                         : "20",
                   );
                 }}
-                className={`block-shadow-sm border-2 border-[var(--ink)] p-4 text-left transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none ${mode === candidate.type ? "" : "opacity-60"}`}
-                style={{
-                  background: mode === candidate.type ? candidate.color : "var(--paper)",
-                  color:
-                    mode !== candidate.type
-                      ? "var(--ink)"
-                      : onSurface(candidate.color),
-                }}
-              >
-                <p className="text-lg font-black uppercase">{candidate.label}</p>
-                <p className="mt-1 text-xs opacity-90">{candidate.tagline}</p>
-              </button>
+              />
             ))}
           </div>
 
@@ -925,6 +1064,7 @@ export function HostPage() {
             />
 
             {(mode === "pulse-choice" ||
+              mode === "chip-stack" ||
               mode === "rank-race" ||
               mode === "future-fork" ||
               mode === "shadow-council") && (
@@ -986,22 +1126,23 @@ export function HostPage() {
             )}
 
             {(mode === "spectrum" ||
+              mode === "fist-five" ||
               mode === "hot-take" ||
               mode === "before-after" ||
               mode === "reality-bender" ||
               mode === "living-consensus") && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field
-                  label={mode === "hot-take" ? "left side" : "left end"}
+                  label={mode === "hot-take" ? "left side" : mode === "fist-five" ? "zero means" : "left end"}
                   value={lowLabel}
                   onChange={setLowLabel}
-                  placeholder="Not confident"
+                  placeholder={mode === "fist-five" ? "Not yet" : "Not confident"}
                 />
                 <Field
-                  label={mode === "hot-take" ? "right side" : "right end"}
+                  label={mode === "hot-take" ? "right side" : mode === "fist-five" ? "five means" : "right end"}
                   value={highLabel}
                   onChange={setHighLabel}
-                  placeholder="Very confident"
+                  placeholder={mode === "fist-five" ? "Could teach it" : "Very confident"}
                 />
               </div>
             )}
@@ -1028,6 +1169,39 @@ export function HostPage() {
                   onChange={setAnswer}
                   placeholder="optional; leave blank to reveal verbally"
                 />
+              </div>
+            )}
+
+            {mode === "chip-stack" && (
+              <Field
+                label="chips each person must spend"
+                type="number"
+                value={chipsPerPerson}
+                onChange={setChipsPerPerson}
+              />
+            )}
+
+            {mode === "over-under" && (
+              <div className="space-y-5 border-2 border-[var(--ink)] bg-[var(--paper-deep)] p-5">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field label="unit" value={unit} onChange={setUnit} />
+                  <Field label="the line" value={lineValue} onChange={setLineValue} />
+                  <Field
+                    label="actual number (sealed)"
+                    value={answer}
+                    onChange={setAnswer}
+                    placeholder="kept secret until reveal"
+                  />
+                </div>
+                <Field
+                  label="round clock in seconds (0 skips the timer)"
+                  type="number"
+                  value={timeLimitSeconds}
+                  onChange={setTimeLimitSeconds}
+                />
+                <p className="mono-tag text-[var(--ink-soft)]">
+                  the room picks over or under. the actual stays sealed until you reveal.
+                </p>
               </div>
             )}
 
@@ -1240,11 +1414,11 @@ export function HostPage() {
                       onChange={() => setResultsMode(candidate)}
                     />
                     {candidate === "live"
-                      ? mode === "prediction"
-                        ? "Live guesses, sealed truth"
+                      ? mode === "prediction" || mode === "over-under"
+                        ? "Live lean, sealed truth"
                         : "Live results"
-                      : mode === "prediction"
-                        ? "Hide guesses until truth"
+                      : mode === "prediction" || mode === "over-under"
+                        ? "Hide the lean until truth"
                         : "Blind until reveal"}
                   </label>
                 ))}
@@ -1305,13 +1479,7 @@ export function HostPage() {
                   <RoundClock
                     deadlineAt={activity.deadlineAt}
                     serverNow={state.serverNow}
-                    durationSeconds={
-                      activity.config.type === "signal-noise" ||
-                      activity.config.type === "cipher-room" ||
-                      activity.config.type === "shadow-council"
-                        ? activity.config.timeLimitSeconds
-                        : undefined
-                    }
+                    durationSeconds={timedRoundSeconds(activity.config)}
                     compact
                   />
                 </div>

@@ -10,7 +10,7 @@ import type { ReactionKind } from "@roomwave/shared";
 
 import { roomHub } from "../realtime/room-hub";
 
-const BUCKET_MS = 600;
+const BUCKET_MS = 280;
 /** Hard cap of reaction units represented per bucket per kind. */
 const MAX_BURST = 24;
 

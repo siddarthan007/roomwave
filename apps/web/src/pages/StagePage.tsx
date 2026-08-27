@@ -1,11 +1,10 @@
-import type { ActivityState } from "@roomwave/shared";
-import { activityHasFinalResult } from "@roomwave/shared";
+import type { ActivityState, ReactionBurst } from "@roomwave/shared";
+import { activityHasFinalResult, timedRoundSeconds } from "@roomwave/shared";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import QRCode from "qrcode";
-import NumberFlow from "@number-flow/react";
 
 import { useRoom } from "../hooks/use-room";
 import {
@@ -15,11 +14,16 @@ import {
 import { ReactionLayer } from "../components/ReactionLayer";
 import { ModeStagePresentation } from "../components/stage-modes";
 import { PixelAvatar } from "../components/PixelAvatar";
+import { ReactionStamp } from "../components/ReactionStamp";
 import { RoundClock } from "../components/RoundClock";
 import { SoundToggle } from "../components/SoundToggle";
 import { playRoomSound } from "../lib/sound";
 import { downloadReceiptCsv, receiptRows } from "../lib/receipt";
 import { downloadReceiptPng } from "../lib/receipt-png";
+import {
+  emptyReactionHeat,
+  REACTION_DOCK,
+} from "../lib/reactions";
 
 const PHASE_COPY: Record<ActivityState, string> = {
   draft: "READY",
@@ -38,16 +42,61 @@ function ArrivalCounter({ value }: { value: number }) {
       initial={shouldReduceMotion ? false : { scale: 1.18, color: "var(--red)" }}
       animate={{ scale: 1, color: "var(--ink)" }}
       transition={{ type: "spring", stiffness: 400, damping: 15 }}
-      className="stage-arrival display mt-3 text-6xl md:text-7xl"
+      className="stage-arrival display mt-1 text-5xl tabular-nums md:text-7xl"
     >
-      <NumberFlow value={value} willChange />
+      {value}
     </motion.p>
   );
 }
 
+function ReactionHeat({
+  burst,
+  roundId,
+}: {
+  burst: ReactionBurst | null;
+  roundId: string | null;
+}) {
+  const [heat, setHeat] = useState(emptyReactionHeat);
 
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- new round clears the live tally
+    setHeat(emptyReactionHeat());
+  }, [roundId]);
 
+  useEffect(() => {
+    if (!burst) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- SSE burst is an external tally event
+    setHeat((current) => ({
+      ...current,
+      [burst.kind]: current[burst.kind] + burst.count,
+    }));
+  }, [burst]);
 
+  const total = (Object.values(heat) as number[]).reduce((sum, value) => sum + value, 0);
+  if (total === 0) return null;
+
+  return (
+    <div
+      className="mt-3 flex flex-wrap gap-2"
+      aria-live="polite"
+      aria-label="Live reactions this round"
+    >
+      {REACTION_DOCK.map((reaction) => {
+        const count = heat[reaction.kind];
+        if (count <= 0) return null;
+        return (
+          <span
+            key={reaction.kind}
+            className="inline-flex min-h-11 items-center gap-2 border-2 border-[var(--ink)] bg-white px-2 py-1"
+          >
+            <ReactionStamp kind={reaction.kind} size={22} />
+            <span className="display text-xl tabular-nums">{count}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 const STAGE_GLYPHS: Record<string, string> = {
   "pulse-choice": "%",
@@ -56,6 +105,9 @@ const STAGE_GLYPHS: Record<string, string> = {
   prediction: "^",
   "hot-take": "_",
   "signal-noise": "~",
+  "chip-stack": "#",
+  "over-under": "/",
+  "fist-five": "5",
 };
 
 function StageWatermark({ glyph }: { glyph: string }) {
@@ -111,7 +163,7 @@ export function StagePage() {
 
   if (!state) {
     return (
-      <main className="grid min-h-screen place-items-center">
+      <main id="roomwave-main" className="grid min-h-dvh place-items-center">
         <p className="mono-tag text-center">{error || "connecting to room…"}</p>
       </main>
     );
@@ -126,10 +178,12 @@ export function StagePage() {
 
   return (
     <main
-      className="safe-page relative min-h-screen overflow-hidden"
+      id="roomwave-main"
+      className="safe-page relative min-h-dvh overflow-hidden"
       data-room-theme={state.room.settings.theme}
     >
       <div aria-hidden="true" className="halftone absolute inset-0" />
+      <div aria-hidden="true" className="paper-grain" />
 
       {/* The room code IS the poster. */}
       <div aria-hidden="true" className="rw-ghost display">
@@ -152,12 +206,13 @@ export function StagePage() {
             <SoundToggle mode={state.room.settings.soundMode} />
           </div>
           {activity && (
-            <>
+            <div className="mt-2 flex flex-col items-start gap-2 sm:items-end">
               <motion.span
                 key={activity.state}
                 initial={shouldReduceMotion ? false : { scaleX: 0.4, opacity: 0 }}
                 animate={{ scaleX: 1, opacity: 1 }}
                 transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+                className="inline-block border-2 border-[var(--ink)] px-3 py-1 text-sm font-black uppercase tracking-widest"
                 style={{
                   transformOrigin: "left",
                   background:
@@ -179,10 +234,13 @@ export function StagePage() {
               {showLiveCount && (
                 <ArrivalCounter value={state.responseCount} />
               )}
-              <p className="stage-status-meta mono-tag mt-2 text-[var(--ink-soft)]">
+              <p className="stage-status-meta mono-tag text-[var(--ink-soft)]">
                 {state.onlineCount} online / {state.participantCount} joined / {state.momentum.trend}
               </p>
-            </>
+              {state.room.settings.allowReactions && (
+                <ReactionHeat burst={burst} roundId={activity.id} />
+              )}
+            </div>
           )}
           {connection !== "connected" && (
             <p className="mono-tag mt-2 text-[var(--red)]">reconnecting…</p>
@@ -212,12 +270,12 @@ export function StagePage() {
                 <img
                   src={qr}
                   alt={`QR code to join room ${state.room.code}`}
-                  className="h-44 w-44 border-4 border-[var(--ink)] bg-[var(--paper)] p-2 block-shadow sm:h-52 sm:w-52 md:h-60 md:w-60"
+                  className="h-44 w-44 border-4 border-[var(--ink)] bg-[var(--paper)] p-2 paper-stack sm:h-52 sm:w-52 md:h-60 md:w-60"
                 />
               )}
               <div className="min-w-0 text-center md:text-left">
                 <p className="mono-tag">or enter code</p>
-                <p className="mt-3 inline-block max-w-full border-4 border-[var(--ink)] bg-white px-4 py-4 display text-4xl block-shadow sm:px-8 sm:text-6xl md:text-7xl">
+                <p className="mt-3 inline-block max-w-full border-4 border-[var(--ink)] bg-white px-4 py-4 display text-4xl paper-stack sm:px-8 sm:text-6xl md:text-7xl">
                   {state.room.code}
                 </p>
                 <p className="mono-tag mt-6 text-[var(--ink-soft)]">
@@ -250,7 +308,7 @@ export function StagePage() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
-            className="stage-question display max-w-5xl break-words text-4xl leading-[0.95] sm:text-5xl md:text-7xl"
+            className="stage-question poster-question max-w-5xl break-words text-4xl sm:text-5xl md:text-7xl"
           >
             {activity.prompt}
           </motion.h1>
@@ -260,13 +318,7 @@ export function StagePage() {
               <RoundClock
                 deadlineAt={activity.deadlineAt}
                 serverNow={state.serverNow}
-                durationSeconds={
-                  activity.config.type === "signal-noise" ||
-                  activity.config.type === "cipher-room" ||
-                  activity.config.type === "shadow-council"
-                    ? activity.config.timeLimitSeconds
-                    : undefined
-                }
+                durationSeconds={timedRoundSeconds(activity.config)}
               />
             </div>
           )}
@@ -304,6 +356,9 @@ export function StagePage() {
                   id="rw-receipt-card"
                   className="rw-receipt-card rw-reveal-stamp relative"
                 >
+                  <p data-receipt-meta className="mono-tag mb-4 text-[var(--ink-soft)]">
+                    {state.room.code} · {activity.type} · {state.responseCount} voices
+                  </p>
                   <ModeStagePresentation
                     activity={activity}
                     aggregate={state.aggregate}
@@ -328,7 +383,7 @@ export function StagePage() {
                     downloadReceiptPng({
                       roomCode: state.room.code,
                       mode: activity.type,
-                      rows: [],
+                      rows: receiptRows(state.aggregate!),
                       responseCount: state.responseCount,
                     }).catch((caught: unknown) =>
                       setReceiptError(

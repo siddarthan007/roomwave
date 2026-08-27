@@ -111,20 +111,24 @@ if (Bun.env.ROOMWAVE_SERVE_WEB === "1") {
   const staticAsset = serveStatic({ root: "./apps/web/dist" });
   const appShell = serveStatic({ path: "./apps/web/dist/index.html" });
   app.use("/assets/*", staticAsset);
+  app.use("/fonts/*", staticAsset);
   for (const asset of [
     "/favicon.svg",
-    "/icons.svg",
+    "/mark.svg",
     "/og.png",
+    "/og.jpg",
     "/robots.txt",
     "/site.webmanifest",
   ]) {
     app.get(asset, staticAsset);
   }
+  app.use("/emoji/*", staticAsset);
   app.get("/", appShell);
   app.get("/host/*", appShell);
   app.get("/join/*", appShell);
   app.get("/room/*", appShell);
   app.get("/stage/*", appShell);
+  app.get("*", appShell);
 }
 
 app.onError(

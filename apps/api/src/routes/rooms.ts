@@ -3,6 +3,7 @@ import { and, count, eq, ne } from "drizzle-orm";
 
 import {
   createRoomSchema,
+  generatedRoomName,
   joinRoomSchema,
   updateRoomSettingsSchema,
 } from "@roomwave/shared";
@@ -54,22 +55,6 @@ import {
 } from "../services/modes";
 
 export const roomRoutes = new Hono<AppEnv>();
-
-const NAME_FIRST = [
-  "Bright", "Quick", "Calm", "Bold", "Lucky", "Kind", "Sharp", "Sunny",
-  "Neon", "Quiet", "Velvet", "Rapid", "Copper", "Lunar", "Witty", "Wild",
-];
-const NAME_SECOND = [
-  "Fox", "Moth", "Otter", "Finch", "Panda", "Gecko", "Lynx", "Koi",
-  "Heron", "Badger", "Cicada", "Raven", "Orca", "Stoat", "Wren", "Newt",
-];
-
-function generatedName(id: string) {
-  let value = 0;
-  for (const character of id) value = (value * 31 + character.charCodeAt(0)) >>> 0;
-  const suffix = (value ^ (value >>> 16)).toString(36).toUpperCase().padStart(3, "0").slice(-3);
-  return `${NAME_FIRST[value % NAME_FIRST.length]} ${NAME_SECOND[Math.floor(value / NAME_FIRST.length) % NAME_SECOND.length]} ${suffix}`;
-}
 
 roomRoutes.post(
   "/",
@@ -302,10 +287,11 @@ roomRoutes.post(
     const participantId =
       crypto.randomUUID();
 
+    const nameSeed = joinInput.data.avatarSeed ?? participantId;
     const displayName =
       room.settings.participantNames === "generated"
-        ? generatedName(participantId)
-        : joinInput.data.displayName ?? generatedName(participantId);
+        ? generatedRoomName(nameSeed)
+        : joinInput.data.displayName ?? generatedRoomName(nameSeed);
     const avatarSeed = joinInput.data.avatarSeed ?? crypto.randomUUID();
 
     const token =

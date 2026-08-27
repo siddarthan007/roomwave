@@ -4,7 +4,8 @@
 
 export type RoomStatus = "lobby" | "live" | "ended";
 
-export type RoomTheme = "paper" | "signal" | "midnight" | "field";
+export type RoomTheme = "paper" | "signal" | "arcade" | "field" | "midnight";
+export const ROOM_THEMES = ["paper", "signal", "arcade", "field"] as const;
 export type ParticipantNameMode = "chosen" | "generated";
 export type RoomSoundMode = "off" | "soft" | "arcade";
 
@@ -70,7 +71,10 @@ export type ActivityType =
   | "living-consensus"
   | "future-fork"
   | "cipher-room"
-  | "shadow-council";
+  | "shadow-council"
+  | "chip-stack"
+  | "over-under"
+  | "fist-five";
 
 export type ResultsMode = "live" | "blind";
 export type PublicTextModerationMode = "live" | "review";
@@ -208,6 +212,24 @@ export interface ShadowCouncilConfig {
   resultsMode: "blind";
 }
 
+export interface ChipStackConfig {
+  options: PulseChoiceOption[];
+  /** Exact chip budget each person must spend. */
+  chipsPerPerson: number;
+  resultsMode: ResultsMode;
+}
+
+export interface OverUnderConfig {
+  unit: string;
+  /** Public number the room bets against. */
+  line: number;
+  /** Host-sealed outcome. Redacted until reveal. */
+  actual: number | null;
+  /** 0 means no server clock. */
+  timeLimitSeconds: number;
+  resultsMode: ResultsMode;
+}
+
 export type ActivityConfig =
   | ({ type: "pulse-choice" } & PulseChoiceConfig)
   | ({ type: "spectrum" } & SpectrumConfig)
@@ -224,7 +246,10 @@ export type ActivityConfig =
   | ({ type: "living-consensus" } & LivingConsensusConfig)
   | ({ type: "future-fork" } & FutureForkConfig)
   | ({ type: "cipher-room" } & CipherRoomConfig)
-  | ({ type: "shadow-council" } & ShadowCouncilConfig);
+  | ({ type: "shadow-council" } & ShadowCouncilConfig)
+  | ({ type: "chip-stack" } & ChipStackConfig)
+  | ({ type: "over-under" } & OverUnderConfig)
+  | ({ type: "fist-five" } & FistFiveConfig);
 
 export type ResponsePayload =
   | { type: "pulse-choice"; optionId: string }
@@ -265,7 +290,17 @@ export type ResponsePayload =
       allocations: Array<{ aliasId: string; points: number }>;
       banishId: string;
       confidence: number;
-    };
+    }
+  | {
+      type: "chip-stack";
+      allocations: Array<{ optionId: string; chips: number }>;
+    }
+  | {
+      type: "over-under";
+      side: "over" | "under";
+      confidence: number;
+    }
+  | { type: "fist-five"; value: number };
 
 export interface Activity {
   id: string;
@@ -485,6 +520,49 @@ export interface ShadowCouncilAggregate {
   tribunalConsensus: number | null;
 }
 
+export interface ChipStackAggregate {
+  type: "chip-stack";
+  total: number;
+  options: Array<{
+    id: string;
+    label: string;
+    chips: number;
+    share: number;
+    average: number;
+  }>;
+  /** 0 = even spend, 100 = every chip on one option. Null until chips land. */
+  concentration: number | null;
+  leaderIds: string[];
+}
+
+export interface OverUnderAggregate {
+  type: "over-under";
+  total: number;
+  line: number;
+  overCount: number;
+  underCount: number;
+  overShare: number;
+  averageConfidence: number;
+  actual: number | null;
+  /** True when the sealed outcome finished strictly above the line. */
+  overWins: boolean | null;
+  accuracy: number | null;
+}
+
+export interface FistFiveConfig {
+  lowLabel: string;
+  highLabel: string;
+  resultsMode: ResultsMode;
+}
+
+export interface FistFiveAggregate {
+  type: "fist-five";
+  total: number;
+  counts: [number, number, number, number, number, number];
+  median: number | null;
+  mean: number | null;
+}
+
 export type ActivityAggregate =
   | PulseChoiceAggregate
   | SpectrumAggregate
@@ -501,7 +579,10 @@ export type ActivityAggregate =
   | LivingConsensusAggregate
   | FutureForkAggregate
   | CipherRoomAggregate
-  | ShadowCouncilAggregate;
+  | ShadowCouncilAggregate
+  | ChipStackAggregate
+  | OverUnderAggregate
+  | FistFiveAggregate;
 
 export interface RoomMomentum {
   /** Responses per second in the latest five-second window. */

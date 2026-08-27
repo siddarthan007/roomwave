@@ -5,7 +5,7 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 export const roomSettingsSchema = z.object({
-  theme: z.enum(["paper", "signal", "midnight", "field"]).default("paper"),
+  theme: z.enum(["paper", "signal", "arcade", "field", "midnight"]).default("paper"),
   lobbyMessage: z.string().trim().max(100).default("Find your square. The next round starts here."),
   allowReactions: z.boolean().default(true),
   allowLateJoin: z.boolean().default(true),
@@ -35,7 +35,7 @@ export type CreateRoomInput = z.infer<typeof createRoomSchema>;
  * .partial()); the route merges parsed fields over stored settings.
  */
 export const updateRoomSettingsSchema = z.object({
-  theme: z.enum(["paper", "signal", "midnight", "field"]).optional(),
+  theme: z.enum(["paper", "signal", "arcade", "field", "midnight"]).optional(),
   lobbyMessage: z.string().trim().max(100).optional(),
   allowReactions: z.boolean().optional(),
   allowLateJoin: z.boolean().optional(),
@@ -240,6 +240,35 @@ export const createShadowCouncilSchema = z
     }
   });
 
+export const createChipStackSchema = z.object({
+  type: z.literal("chip-stack"),
+  prompt: z.string().trim().min(1, "Question is required").max(160),
+  options: z
+    .array(z.string().trim().min(1, "Option cannot be empty").max(80))
+    .min(2, "At least two options are required")
+    .max(6, "Maximum six options"),
+  chipsPerPerson: z.number().int().min(3).max(20).default(10),
+  resultsMode: resultsModeSchema,
+});
+
+export const createOverUnderSchema = z.object({
+  type: z.literal("over-under"),
+  prompt: z.string().trim().min(1, "Question is required").max(160),
+  unit: z.string().trim().min(1, "Unit is required").max(12),
+  line: boundedPredictionValue,
+  actual: boundedPredictionValue.nullable(),
+  timeLimitSeconds: z.number().int().min(0).max(180).default(30),
+  resultsMode: resultsModeSchema,
+});
+
+export const createFistFiveSchema = z.object({
+  type: z.literal("fist-five"),
+  prompt: z.string().trim().min(1, "Question is required").max(160),
+  lowLabel: z.string().trim().min(1).max(40),
+  highLabel: z.string().trim().min(1).max(40),
+  resultsMode: resultsModeSchema,
+});
+
 export const createActivitySchema = z.discriminatedUnion("type", [
   createPulseChoiceSchema,
   createSpectrumSchema,
@@ -257,6 +286,9 @@ export const createActivitySchema = z.discriminatedUnion("type", [
   createFutureForkSchema,
   createCipherRoomSchema,
   createShadowCouncilSchema,
+  createChipStackSchema,
+  createOverUnderSchema,
+  createFistFiveSchema,
 ]);
 
 export type CreateActivityInput = z.infer<typeof createActivitySchema>;
@@ -422,6 +454,30 @@ export const shadowCouncilResponseSchema = z.object({
   confidence: z.number().int().min(50).max(100),
 });
 
+export const chipStackResponseSchema = z.object({
+  type: z.literal("chip-stack"),
+  allocations: z
+    .array(
+      z.object({
+        optionId: z.string().uuid(),
+        chips: z.number().int().min(0).max(20),
+      }),
+    )
+    .min(2)
+    .max(6),
+});
+
+export const overUnderResponseSchema = z.object({
+  type: z.literal("over-under"),
+  side: z.enum(["over", "under"]),
+  confidence: z.number().int().min(50).max(100),
+});
+
+export const fistFiveResponseSchema = z.object({
+  type: z.literal("fist-five"),
+  value: z.number().int().min(0).max(5),
+});
+
 export const submitResponseSchema = z.discriminatedUnion("type", [
   pulseChoiceResponseSchema,
   spectrumResponseSchema,
@@ -439,6 +495,9 @@ export const submitResponseSchema = z.discriminatedUnion("type", [
   futureForkResponseSchema,
   cipherRoomResponseSchema,
   shadowCouncilResponseSchema,
+  chipStackResponseSchema,
+  overUnderResponseSchema,
+  fistFiveResponseSchema,
 ]);
 
 // ---------------------------------------------------------------------------

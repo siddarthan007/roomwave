@@ -51,7 +51,7 @@ function resolveColor(value: string, palette: Record<string, string>): string {
 test("every named action surface has a WCAG AA foreground in every room theme", async () => {
   const css = await Bun.file(join(import.meta.dir, "../apps/web/src/index.css")).text();
   const root = declarations(css.match(/:root\s*{([^}]+)}/)?.[1] ?? "");
-  const themes = ["paper", "signal", "midnight", "field"];
+  const themes = ["paper", "signal", "arcade", "field", "midnight"];
 
   for (const theme of themes) {
     const override = theme === "paper"

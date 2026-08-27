@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  budgetConcentration,
   meanAbsoluteError,
   median,
   normalizedEntropy,
@@ -70,5 +71,22 @@ describe("meanAbsoluteError", () => {
 
   test("mean of absolute deviations", () => {
     expect(meanAbsoluteError([8, 12], 10)).toBe(2);
+  });
+});
+
+describe("budgetConcentration", () => {
+  test("empty or single pile is null", () => {
+    expect(budgetConcentration([])).toBeNull();
+    expect(budgetConcentration([10])).toBeNull();
+    expect(budgetConcentration([0, 0])).toBeNull();
+  });
+
+  test("even split is 0", () => {
+    expect(budgetConcentration([5, 5])).toBe(0);
+    expect(budgetConcentration([4, 4, 4])).toBe(0);
+  });
+
+  test("one pile takes everything is 100", () => {
+    expect(budgetConcentration([10, 0])).toBe(100);
   });
 });

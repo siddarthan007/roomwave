@@ -19,6 +19,8 @@ const liveConfigs: ActivityConfig[] = [
   { type: "question-board", maxChars: 140, resultsMode: "live" },
   { type: "before-after", lowLabel: "Low", highLabel: "High", resultsMode: "live" },
   { type: "living-consensus", lowLabel: "Low", highLabel: "High", resultsMode: "live" },
+  { type: "chip-stack", options: [{ id, label: "A" }, { id: "22222222-2222-2222-2222-222222222222", label: "B" }], chipsPerPerson: 10, resultsMode: "live" },
+  { type: "fist-five", lowLabel: "Not yet", highLabel: "Could teach it", resultsMode: "live" },
 ];
 
 const revealConfigs: ActivityConfig[] = [
@@ -36,6 +38,9 @@ const revealConfigs: ActivityConfig[] = [
   { type: "future-fork", branches: [{ id, label: "A" }], evidenceDrop: "Evidence", resultsMode: "blind" },
   { type: "cipher-room", ciphertext: "B", clue: "", correctShift: null, timeLimitSeconds: 45, resultsMode: "blind" },
   { type: "shadow-council", aliases: [{ id, label: "A" }], evidence: "Evidence", shadowAliasId: null, suspicionPoints: 3, timeLimitSeconds: 60, resultsMode: "blind" },
+  { type: "over-under", unit: "%", line: 50, actual: null, timeLimitSeconds: 30, resultsMode: "live" },
+  { type: "chip-stack", options: [{ id, label: "A" }], chipsPerPerson: 10, resultsMode: "blind" },
+  { type: "fist-five", lowLabel: "Not yet", highLabel: "Could teach it", resultsMode: "blind" },
 ];
 
 describe("activity reveal policy", () => {

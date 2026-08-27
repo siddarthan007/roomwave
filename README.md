@@ -11,6 +11,9 @@ from a phone, and visibly change a shared projector surface.
 - Word Bloom and Question Board for bounded public text and a voted stage queue
 - Crowd Meter with bounded repeated taps and rolling pressure decay
 - Rank Race with touch, pointer, keyboard sorting and room-wide Borda scoring
+- Fist Five with a 0–5 classroom hand, median, and mean
+- Chip Stack with a fixed chip budget, live stacks, and spend-focus concentration
+- Over / Under with a published line, sealed actual, and room accuracy after reveal
 - Quadrant Drop with a two-axis placement surface, centroid, shares, and outliers
 - Reality Bender with perceived-versus-actual distributions and misread analytics
 - Living Consensus with confidence-weighted agreement, polarization, and a responsive organism

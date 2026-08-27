@@ -682,3 +682,124 @@ describe("expanded interaction families", () => {
     ).toBe(false);
   });
 });
+
+describe("chip-stack mode", () => {
+  test("sums chips, reports concentration, and rejects a short budget", () => {
+    const left = "11111111-1111-1111-1111-111111111111";
+    const right = "22222222-2222-2222-2222-222222222222";
+    const config: ActivityConfig = {
+      type: "chip-stack",
+      options: [
+        { id: left, label: "Labs" },
+        { id: right, label: "Talks" },
+      ],
+      chipsPerPerson: 10,
+      resultsMode: "live",
+    };
+    seedActivity("chip-stack", config);
+    seedParticipants(2);
+    submit({
+      type: "chip-stack",
+      allocations: [
+        { optionId: left, chips: 7 },
+        { optionId: right, chips: 3 },
+      ],
+    }, 0);
+    submit({
+      type: "chip-stack",
+      allocations: [
+        { optionId: left, chips: 10 },
+        { optionId: right, chips: 0 },
+      ],
+    }, 1);
+
+    const aggregate = aggregateActivity({ id: activityId, type: "chip-stack", state: "live", config });
+    expect(aggregate.type).toBe("chip-stack");
+    if (aggregate.type !== "chip-stack") return;
+    expect(aggregate.total).toBe(2);
+    expect(aggregate.options.find((option) => option.id === left)?.chips).toBe(17);
+    expect(aggregate.leaderIds).toEqual([left]);
+    expect(aggregate.concentration).toBeGreaterThan(0);
+
+    expect(
+      validateResponseFor(
+        { type: "chip-stack", config },
+        {
+          type: "chip-stack",
+          allocations: [
+            { optionId: left, chips: 4 },
+            { optionId: right, chips: 4 },
+          ],
+        },
+      ).ok,
+    ).toBe(false);
+  });
+});
+
+describe("over-under mode", () => {
+  test("hides the actual until reveal and scores the winning side", () => {
+    const config: ActivityConfig = {
+      type: "over-under",
+      unit: "%",
+      line: 40,
+      actual: 62,
+      timeLimitSeconds: 30,
+      resultsMode: "live",
+    };
+    seedActivity("over-under", config);
+    seedParticipants(3);
+    submit({ type: "over-under", side: "over", confidence: 70 }, 0);
+    submit({ type: "over-under", side: "over", confidence: 80 }, 1);
+    submit({ type: "over-under", side: "under", confidence: 60 }, 2);
+
+    const live = aggregateActivity({ id: activityId, type: "over-under", state: "locked", config });
+    expect(live.type).toBe("over-under");
+    if (live.type !== "over-under") return;
+    expect(live.actual).toBeNull();
+    expect(live.overWins).toBeNull();
+    expect(live.overCount).toBe(2);
+
+    const revealed = aggregateActivity({ id: activityId, type: "over-under", state: "revealed", config });
+    expect(revealed.type).toBe("over-under");
+    if (revealed.type !== "over-under") return;
+    expect(revealed.actual).toBe(62);
+    expect(revealed.overWins).toBe(true);
+    expect(revealed.accuracy).toBe(67);
+  });
+});
+
+describe("fist-five mode", () => {
+  test("bins 0 through 5 and reports median and mean", () => {
+    const config: ActivityConfig = {
+      type: "fist-five",
+      lowLabel: "Not yet",
+      highLabel: "Could teach it",
+      resultsMode: "live",
+    };
+    seedActivity("fist-five", config);
+    seedParticipants(4);
+    submit({ type: "fist-five", value: 2 }, 0);
+    submit({ type: "fist-five", value: 5 }, 1);
+    submit({ type: "fist-five", value: 5 }, 2);
+    submit({ type: "fist-five", value: 0 }, 3);
+
+    const aggregate = aggregateActivity({
+      id: activityId,
+      type: "fist-five",
+      state: "live",
+      config,
+    });
+    expect(aggregate.type).toBe("fist-five");
+    if (aggregate.type !== "fist-five") return;
+    expect(aggregate.total).toBe(4);
+    expect(aggregate.counts).toEqual([1, 0, 1, 0, 0, 2]);
+    expect(aggregate.median).toBe(3.5);
+    expect(aggregate.mean).toBe(3);
+    expect(
+      validateResponseFor(
+        { type: "fist-five", config },
+        { type: "fist-five", value: 6 },
+      ).ok,
+    ).toBe(false);
+  });
+});

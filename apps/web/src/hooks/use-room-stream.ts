@@ -103,7 +103,7 @@ export function useRoomStream(
         retryDelay = Math.min(retryDelay * 2, 15_000);
       };
 
-      for (const name of EVENT_NAMES) {
+      for (const name of [...EVENT_NAMES, "heartbeat"] as const) {
         source.addEventListener(name, (rawEvent) => {
           const message = rawEvent as MessageEvent;
           const parsedId = Number.parseInt(message.lastEventId ?? "", 10);
@@ -111,6 +111,7 @@ export function useRoomStream(
             lastEventIdRef.current = parsedId;
           }
           armWatchdog();
+          if (name === "heartbeat") return;
           try {
             callbackRef.current(JSON.parse(message.data) as RoomEvent);
           } catch (error) {

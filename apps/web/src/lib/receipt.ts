@@ -17,11 +17,11 @@ export interface ReceiptRow {
 }
 
 function pct(value: number | null | undefined): string {
-  return value === null || value === undefined ? "—" : `${Math.round(value)}%`;
+  return value === null || value === undefined ? "n/a" : `${Math.round(value)}%`;
 }
 
 function num(value: number | null | undefined, digits = 1): string {
-  if (value === null || value === undefined) return "—";
+  if (value === null || value === undefined) return "n/a";
   const rounded = Number(value.toFixed(digits));
   return String(rounded);
 }
@@ -29,7 +29,7 @@ function num(value: number | null | undefined, digits = 1): string {
 /**
  * Flattens any aggregate into ordered receipt rows.
  * Blind rounds naturally produce fewer rows: hidden truth fields stay null
- * until reveal, and this renders them honestly as "—" rather than guessing.
+ * until reveal, and this renders them honestly as "n/a" rather than guessing.
  */
 export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
   switch (aggregate.type) {
@@ -77,7 +77,7 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
         term.count > 1 ? `${term.text} ×${term.count}` : term.text,
       );
       const rows: ReceiptRow[] = [
-        { label: "top phrases", value: top.join(", ") || "—" },
+        { label: "top phrases", value: top.join(", ") || "n/a" },
         { label: "chorus share", value: pct(aggregate.chorusShare) },
         { label: "phrase variety", value: pct(aggregate.phraseVariety) },
       ];
@@ -122,8 +122,8 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
       );
       const quadrantNames = ["upper-left", "upper-right", "lower-left", "lower-right"];
       return [
-        { label: "centroid", value: centroid ? `${num(centroid.x / 10)}, ${num(centroid.y / 10)}` : "—" },
-        { label: "dominant quadrant", value: pct(aggregate.quadrantShares[strongest]) === "0%" ? "—" : quadrantNames[strongest] },
+        { label: "centroid", value: centroid ? `${num(centroid.x / 10)}, ${num(centroid.y / 10)}` : "n/a" },
+        { label: "dominant quadrant", value: pct(aggregate.quadrantShares[strongest]) === "0%" ? "n/a" : quadrantNames[strongest] },
         { label: "outliers", value: String(aggregate.outlierCount) },
       ];
     }
@@ -136,7 +136,7 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
       return [
         { label: "questions asked", value: String(aggregate.total) },
         { label: "answered on stage", value: String(answered) },
-        { label: "top voted", value: top.join(" · ") || "—" },
+        { label: "top voted", value: top.join(" · ") || "n/a" },
       ];
     }
     case "before-after":
@@ -184,7 +184,7 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
           value: `${aggregate.perceptionGap > 0 ? "+" : ""}${num(aggregate.perceptionGap / 10, 0)}`,
         },
         { label: "misread share", value: pct(aggregate.misreadShare) },
-        { label: "projection correlation", value: aggregate.projectionCorrelation === null ? "—" : num(aggregate.projectionCorrelation, 2) },
+        { label: "projection correlation", value: aggregate.projectionCorrelation === null ? "n/a" : num(aggregate.projectionCorrelation, 2) },
       ];
     case "living-consensus":
       return [
@@ -208,7 +208,7 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
     }
     case "cipher-room": {
       const rows: ReceiptRow[] = [
-        { label: "most common shift", value: aggregate.mostCommonShift === null ? "—" : String(aggregate.mostCommonShift) },
+        { label: "most common shift", value: aggregate.mostCommonShift === null ? "n/a" : String(aggregate.mostCommonShift) },
         { label: "average confidence", value: pct(aggregate.averageConfidence) },
       ];
       if (aggregate.correctShift !== null) {
@@ -241,10 +241,47 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
           label: "the room suspected",
           value:
             mostSuspected.id === shadow.id
-              ? `${mostSuspected.label} — correct`
-              : `${mostSuspected.label} — wrong`,
+              ? `${mostSuspected.label}, correct`
+              : `${mostSuspected.label}, wrong`,
         });
       }
+      return rows;
+    }
+    case "chip-stack": {
+      const rows: ReceiptRow[] = aggregate.options.map((option) => ({
+        label: option.label,
+        value: `${option.chips} chips · ${Math.round(option.share)}%`,
+      }));
+      rows.push({ label: "spend focus", value: pct(aggregate.concentration) });
+      if (aggregate.leaderIds.length > 0) {
+        const leaders = aggregate.options
+          .filter((option) => aggregate.leaderIds.includes(option.id))
+          .map((option) => option.label);
+        rows.push({ label: "leading stack", value: leaders.join(", ") });
+      }
+      return rows;
+    }
+    case "over-under": {
+      const rows: ReceiptRow[] = [
+        { label: "line", value: num(aggregate.line) },
+        { label: "over calls", value: String(aggregate.overCount) },
+        { label: "under calls", value: String(aggregate.underCount) },
+        { label: "average confidence", value: pct(aggregate.averageConfidence) },
+      ];
+      if (aggregate.actual !== null) {
+        rows.push({ label: "actual", value: num(aggregate.actual) });
+        rows.push({ label: "side that hit", value: aggregate.overWins ? "over" : "under" });
+        rows.push({ label: "room accuracy", value: pct(aggregate.accuracy) });
+      }
+      return rows;
+    }
+    case "fist-five": {
+      const rows: ReceiptRow[] = aggregate.counts.map((count, level) => ({
+        label: `${level}`,
+        value: `${count} · ${aggregate.total === 0 ? 0 : Math.round((count / aggregate.total) * 100)}%`,
+      }));
+      rows.push({ label: "median hand", value: num(aggregate.median) });
+      rows.push({ label: "mean hand", value: num(aggregate.mean) });
       return rows;
     }
   }

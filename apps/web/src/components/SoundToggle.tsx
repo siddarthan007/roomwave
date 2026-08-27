@@ -1,11 +1,14 @@
 import type { RoomSoundMode } from "@roomwave/shared";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { isSoundEnabled, setSoundEnabled } from "../lib/sound";
+import { bindRoomSound, isSoundEnabled, setSoundEnabled } from "../lib/sound";
 
 export function SoundToggle({ mode }: { mode: RoomSoundMode }) {
   const [enabled, setEnabled] = useState(isSoundEnabled);
+  useEffect(() => {
+    bindRoomSound(mode);
+  }, [mode]);
   if (mode === "off") return null;
   return (
     <button

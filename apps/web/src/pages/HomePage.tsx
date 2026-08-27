@@ -1,10 +1,12 @@
 import type { FormEvent } from "react";
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
+import { ROOM_THEMES, type RoomTheme } from "@roomwave/shared";
 
 import { createRoom } from "../lib/api";
-import { saveHostToken } from "../lib/storage";
+import { getLastJoinCode, listHostRooms, rememberHostRoom, rememberLastJoinCode } from "../lib/storage";
 import {
   BlockButton,
   ErrorNote,
@@ -12,16 +14,16 @@ import {
   Kicker,
 } from "../components/ui";
 import { RoomwaveMark } from "../components/RoomwaveMark";
-import type { RoomTheme } from "@roomwave/shared";
 
 export function HomePage() {
   const navigate = useNavigate();
 
   const [title, setTitle] = useState("");
-  const [joinCode, setJoinCode] = useState("");
+  const [joinCode, setJoinCode] = useState(getLastJoinCode);
   const [theme, setTheme] = useState<RoomTheme>("paper");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const hostRooms = listHostRooms();
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -29,7 +31,10 @@ export function HomePage() {
     setError("");
     try {
       const result = await createRoom(title, { theme });
-      saveHostToken(result.room.id, result.hostToken);
+      rememberHostRoom(result.room.id, result.hostToken, {
+        title: result.room.title,
+        code: result.room.code,
+      });
       navigate(`/host/${result.room.id}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something went wrong.");
@@ -42,14 +47,16 @@ export function HomePage() {
     event.preventDefault();
     const code = joinCode.trim().toUpperCase();
     if (!code) return;
+    rememberLastJoinCode(code);
     navigate(`/join/${code}`);
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden">
+    <main id="roomwave-main" className="relative min-h-dvh overflow-hidden">
       <div aria-hidden="true" className="halftone absolute inset-0" />
+      <div aria-hidden="true" className="paper-grain" />
 
-      <div className="safe-page safe-gutters safe-top relative mx-auto max-w-5xl px-5 py-10 sm:px-6 sm:py-16 md:py-20">
+      <div className="safe-page safe-gutters safe-top page-pad relative mx-auto max-w-5xl">
         {/* Poster masthead */}
         <header>
           <RoomwaveMark />
@@ -67,11 +74,10 @@ export function HomePage() {
           </p>
         </header>
 
-        {/* Two dominant paths, asymmetric poster composition */}
-        <div className="mt-16 grid gap-10 md:grid-cols-[1.2fr_1fr] md:gap-14">
+        <div className="mt-10 flex flex-col-reverse gap-8 md:mt-16 md:grid md:grid-cols-[1.2fr_1fr] md:gap-14">
           <form onSubmit={handleCreate}>
             <Kicker>host a room</Kicker>
-            <div className="mt-4 border-2 border-[var(--ink)] bg-white p-7 block-shadow">
+            <div className="mt-4 border-2 border-[var(--ink)] bg-white p-5 paper-stack sm:p-7">
               <Field
                 label="give it a name"
                 value={title}
@@ -82,7 +88,7 @@ export function HomePage() {
               <fieldset className="mt-5">
                 <legend className="mono-tag text-[var(--ink-soft)]">starter palette</legend>
                 <div className="mt-3 grid grid-cols-4 gap-2">
-                  {(["paper", "signal", "midnight", "field"] as const).map((candidate) => (
+                  {ROOM_THEMES.map((candidate) => (
                     <button
                       key={candidate}
                       type="button"
@@ -95,22 +101,17 @@ export function HomePage() {
                   ))}
                 </div>
               </fieldset>
-              <button
-                type="submit"
-                disabled={loading || !title.trim()}
-                className="block-shadow-sm mt-6 w-full border-2 border-[var(--ink)]
-                  bg-[var(--red)] py-4 text-xl font-black uppercase tracking-wide
-                  text-[var(--on-red)] transition-transform active:translate-x-[3px]
-                  active:translate-y-[3px] active:shadow-none disabled:opacity-40"
-              >
-                {loading ? "creating…" : "open the room →"}
-              </button>
+              <div className="mt-6">
+                <BlockButton type="submit" wide disabled={loading || !title.trim()} color="var(--red)">
+                  {loading ? "creating…" : "open the room"}
+                </BlockButton>
+              </div>
             </div>
           </form>
 
           <form onSubmit={handleJoin}>
             <Kicker>join a room</Kicker>
-            <div className="mt-4 border-2 border-[var(--ink)] bg-[var(--paper-deep)] p-7 block-shadow-red">
+            <div className="mt-4 border-2 border-[var(--ink)] bg-[var(--paper-deep)] p-5 paper-stack-red sm:p-7">
               <Field
                 label="room code"
                 value={joinCode}
@@ -131,30 +132,36 @@ export function HomePage() {
           </form>
         </div>
 
+        {hostRooms.length > 0 && (
+          <section className="mt-12 border-2 border-[var(--ink)] bg-white p-5 block-shadow-sm">
+            <Kicker>your rooms on this device</Kicker>
+            <ul className="mt-4 space-y-2">
+              {hostRooms.map((room) => (
+                <li key={room.roomId}>
+                  <Link
+                    to={`/host/${room.roomId}`}
+                    className="press-plate flex min-h-12 items-center justify-between gap-3 border-2 border-[var(--ink)] px-3 py-2"
+                  >
+                    <span className="min-w-0 truncate font-black">{room.title}</span>
+                    <span className="mono-tag shrink-0">{room.code}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {error && (
           <div className="mt-8 max-w-md">
             <ErrorNote message={error} />
           </div>
         )}
 
-        {/* Mode strip shows the product range without a long explanation. */}
-        <footer className="mono-tag mt-20 flex flex-wrap gap-x-8 gap-y-2 text-[var(--ink-soft)]">
-          <span>pulse choice</span>
-          <span>spectrum</span>
-          <span>prediction battle</span>
-          <span>rank race</span>
-          <span>hot take duel</span>
-          <span>quadrant drop</span>
-          <span>word bloom</span>
-          <span>question board</span>
-          <span>crowd meter</span>
-          <span>before / after</span>
-          <span className="text-[var(--red)]">signal / noise game</span>
-          <span className="text-[var(--violet)]">reality bender</span>
-          <span>living consensus</span>
-          <span>future fork</span>
-          <span className="text-[var(--red)]">cipher room</span>
-          <span className="text-[var(--red)]">shadow council</span>
+        <footer className="mt-14 border-t-4 border-[var(--ink)] pt-5 sm:mt-20">
+          <p className="mono-tag text-[var(--ink-soft)]">what the room can play</p>
+          <p className="mt-3 max-w-xl text-sm font-black uppercase leading-relaxed tracking-wide text-[var(--ink)]">
+            Pulse, spectrum, fist five, chip stack, over / under, plus the sealed games.
+          </p>
         </footer>
       </div>
     </main>

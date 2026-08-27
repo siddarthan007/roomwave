@@ -9,6 +9,10 @@ import { roomHub } from "../realtime/room-hub";
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function deadlineFor(config: ActivityConfig, now = Date.now()) {
+  if (config.type === "over-under") {
+    if (config.timeLimitSeconds <= 0) return null;
+    return new Date(now + config.timeLimitSeconds * 1000).toISOString();
+  }
   if (
     config.type !== "signal-noise" &&
     config.type !== "cipher-room" &&

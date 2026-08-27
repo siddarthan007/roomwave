@@ -1,4 +1,5 @@
 import type { ActivityState } from "@roomwave/shared";
+import { activityRequiresReveal } from "@roomwave/shared";
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -54,9 +55,8 @@ export function PresenterPage() {
 
   const canLock = phase === "live" && Boolean(hostToken) && !busy;
   const canReveal =
-    (phase === "locked" || phase === "revealed") &&
-    activity?.config.resultsMode === "blind" &&
-    phase !== "revealed" &&
+    phase === "locked" &&
+    Boolean(activity && activityRequiresReveal(activity.config)) &&
     Boolean(hostToken) &&
     !busy;
   const nextEntry = playlist[0];
@@ -151,7 +151,7 @@ export function PresenterPage() {
 
   if (!hostToken) {
     return (
-      <main className="grid min-h-screen place-items-center px-6">
+      <main className="grid min-h-dvh place-items-center px-6">
         <div className="max-w-sm text-center">
           <Kicker color="var(--red)">presenter remote</Kicker>
           <p className="mt-4 text-lg font-bold">
@@ -161,7 +161,7 @@ export function PresenterPage() {
             to={roomId ? `/host/${roomId}` : "/"}
             className="mono-tag mt-6 inline-block border-2 border-[var(--ink)] bg-[var(--yellow)] px-4 py-2"
           >
-            go to studio →
+            go to studio
           </Link>
         </div>
       </main>
@@ -170,7 +170,8 @@ export function PresenterPage() {
 
   return (
     <main
-      className="safe-page safe-gutters mx-auto flex min-h-screen max-w-md flex-col px-5 pb-10 pt-8"
+      id="roomwave-main"
+      className="safe-page safe-gutters page-pad mx-auto flex min-h-dvh max-w-md flex-col"
       data-room-theme={state?.room.settings.theme}
     >
       <header className="flex items-start justify-between gap-3">
@@ -247,7 +248,7 @@ export function PresenterPage() {
               {nextEntry.prompt}
             </span>
             <span className="mono-tag mt-1 block opacity-80">
-              tap to end current & start →
+              tap to end current and start
             </span>
           </button>
         ) : (

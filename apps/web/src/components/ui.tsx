@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import NumberFlow from "@number-flow/react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { onSurface } from "./surface-color";
 
@@ -24,7 +24,7 @@ export function Headline({
   return <h1 className={`display ${sizes[size]}`}>{children}</h1>;
 }
 
-/** Small mono kicker label, print-style. */
+/** Small condensed kicker label, print-style. */
 export function Kicker({
   children,
   color = "var(--ink)",
@@ -57,20 +57,22 @@ export function BlockButton({
   wide?: boolean;
   textColor?: string;
 }) {
+  const reduce = useReducedMotion();
   return (
-    <button
+    <motion.button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`press-plate block-shadow-sm border-2 border-[var(--ink)] px-6 py-3 text-lg
-        font-bold uppercase tracking-wide
-        disabled:relative disabled:isolate ${wide ? "w-full" : ""}`}
+      whileTap={disabled || reduce ? undefined : { x: 3, y: 3, boxShadow: "0px 0px 0px var(--ink)" }}
+      transition={{ type: "spring", stiffness: 700, damping: 32 }}
+      className={`relative isolate border-2 border-[var(--ink)] px-6 py-3 text-lg
+        font-bold uppercase tracking-wide block-shadow-sm
+        disabled:cursor-not-allowed ${wide ? "w-full" : ""}`}
       style={{
         background: color,
         color: textColor ?? onSurface(color),
       }}
     >
-      {/* Disabled reads as OFF-LINE (striped plate), not faded out. */}
       {disabled && (
         <span
           aria-hidden="true"
@@ -82,11 +84,11 @@ export function BlockButton({
         />
       )}
       <span className="relative">{children}</span>
-    </button>
+    </motion.button>
   );
 }
 
-/** Ink-outlined text field on paper. */
+/** Ink-outlined text field on a white paper slip. */
 export function Field({
   value,
   onChange,
@@ -121,9 +123,9 @@ export function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full border-2 border-[var(--ink)] bg-[var(--paper)] px-4
+        className="min-h-12 w-full border-2 border-[var(--ink)] bg-white px-4
           py-3 text-lg transition-shadow placeholder:text-[var(--ink-soft)]/50
-          focus:shadow-[4px_4px_0_var(--ink)] focus:outline-none"
+          focus:shadow-[4px_4px_0_var(--ink)]"
       />
     </label>
   );
@@ -131,10 +133,17 @@ export function Field({
 
 /** Oversized rolling count numeral. */
 export function CountRoll({ value }: { value: number }) {
+  const reduce = useReducedMotion();
   return (
-    <span className="display text-5xl tabular-nums md:text-6xl">
-      <NumberFlow value={value} willChange />
-    </span>
+    <motion.span
+      key={value}
+      initial={reduce ? false : { y: 12, opacity: 0.4 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 400, damping: 20 }}
+      className="display inline-block text-5xl tabular-nums md:text-6xl"
+    >
+      {value}
+    </motion.span>
   );
 }
 

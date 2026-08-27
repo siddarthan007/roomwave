@@ -1,18 +1,23 @@
-import type { ReactionKind } from "@roomwave/shared";
-import { activityHasFinalResult } from "@roomwave/shared";
+import type { ReactionBurst, ReactionKind } from "@roomwave/shared";
+import { activityHasFinalResult, timedRoundSeconds } from "@roomwave/shared";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { motion } from "motion/react";
 
 import { useRoom } from "../hooks/use-room";
 import { sendReaction, touchPresence } from "../lib/api";
 import { getParticipantSession } from "../lib/storage";
+import { copyText } from "../lib/clipboard";
+import { REACTION_DOCK } from "../lib/reactions";
 import { ReactionLayer } from "../components/ReactionLayer";
+import { ReactionStamp } from "../components/ReactionStamp";
 import { PixelAvatar } from "../components/PixelAvatar";
 import { RoundClock } from "../components/RoundClock";
 import { SoundToggle } from "../components/SoundToggle";
-import { playRoomSound } from "../lib/sound";
+import { playBoundSound, playRoomSound } from "../lib/sound";
 import {
+  BlockButton,
   Headline,
   Kicker,
 } from "../components/ui";
@@ -20,14 +25,6 @@ import {
   LockedNotice,
   ModeParticipantInput,
 } from "../components/participant-modes";
-
-const REACTIONS: { kind: ReactionKind; label: string; color: string }[] = [
-  { kind: "spark", label: "✦", color: "var(--yellow)" },
-  { kind: "flame", label: "▲", color: "var(--red)" },
-  { kind: "clap", label: "■", color: "var(--blue)" },
-  { kind: "wave", label: "〜", color: "var(--green)" },
-  { kind: "bolt", label: "⟋", color: "var(--violet)" },
-];
 
 export function ParticipantPage() {
   const { roomId } = useParams();
@@ -37,6 +34,8 @@ export function ParticipantPage() {
   const sharedTimer = useRef<number | null>(null);
   const lastPhase = useRef<string | null>(null);
   const [shared, setShared] = useState(false);
+  const [localBurst, setLocalBurst] = useState<ReactionBurst | null>(null);
+  const [pressedKind, setPressedKind] = useState<ReactionKind | null>(null);
   const session = useMemo(
     () => (roomId ? getParticipantSession(roomId) : null),
     [roomId],
@@ -84,7 +83,7 @@ export function ParticipantPage() {
 
   if (!state) {
     return (
-      <main className="grid min-h-screen place-items-center">
+      <main id="roomwave-main" className="grid min-h-dvh place-items-center">
         <p className="mono-tag text-center">
           {roomError || "joining…"}
         </p>
@@ -104,6 +103,12 @@ export function ParticipantPage() {
     if (now - lastSent.current < 1000) return;
     lastSent.current = now;
     navigator.vibrate?.(15);
+    playBoundSound("react");
+    setLocalBurst({ kind, count: 1, bucket: -now });
+    setPressedKind(kind);
+    window.setTimeout(() => {
+      setPressedKind((current) => (current === kind ? null : current));
+    }, 280);
     if (!session) return;
     void sendReaction(roomId!, session.token, kind);
   }
@@ -116,7 +121,7 @@ export function ParticipantPage() {
       if (navigator.share) {
         await navigator.share({ title: state.room.title, text, url });
       } else {
-        await navigator.clipboard.writeText(`${text} ${url}`);
+        await copyText(`${text} ${url}`);
       }
       setShared(true);
       if (sharedTimer.current !== null) window.clearTimeout(sharedTimer.current);
@@ -131,10 +136,11 @@ export function ParticipantPage() {
 
   return (
     <main
-      className={`safe-page safe-gutters safe-top relative min-h-screen overflow-hidden px-5 pt-8 ${state.room.settings.allowReactions ? "pb-32" : "pb-8"}`}
+      id="roomwave-main"
+      className={`safe-page safe-gutters safe-top relative min-h-dvh overflow-hidden pt-6 ${state.room.settings.allowReactions ? "has-reaction-dock" : "pb-8"}`}
       data-room-theme={state.room.settings.theme}
     >
-      <ReactionLayer burst={burst} />
+      <ReactionLayer burst={burst} localBurst={localBurst} />
 
       <header className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
@@ -157,7 +163,7 @@ export function ParticipantPage() {
       </header>
 
       {!activity || activity.state === "draft" ? (
-        <section className="mt-24 text-center">
+        <section className="mt-12 text-center sm:mt-20">
           <Headline size="lg">
             Waiting for<br />the host
           </Headline>
@@ -181,13 +187,7 @@ export function ParticipantPage() {
               <RoundClock
                 deadlineAt={activity.deadlineAt}
                 serverNow={state.serverNow}
-                durationSeconds={
-                  activity.config.type === "signal-noise" ||
-                  activity.config.type === "cipher-room" ||
-                  activity.config.type === "shadow-council"
-                    ? activity.config.timeLimitSeconds
-                    : undefined
-                }
+                durationSeconds={timedRoundSeconds(activity.config)}
               />
             </div>
           )}
@@ -205,16 +205,21 @@ export function ParticipantPage() {
                 <p className="mt-1 text-sm text-[var(--ink-soft)]">
                   Your answer slot expired. Rejoin to keep playing.
                 </p>
-                <button
-                  onClick={() => navigate(`/join/${state.room.code}`)}
-                  className="block-shadow-sm mt-4 w-full border-2 border-[var(--ink)]
-                    bg-[var(--yellow)] py-3 text-lg font-bold uppercase"
-                >
-                  rejoin room
-                </button>
+                <div className="mt-4">
+                  <BlockButton
+                    onClick={() => navigate(`/join/${state.room.code}`)}
+                    wide
+                    color="var(--yellow)"
+                  >
+                    rejoin room
+                  </BlockButton>
+                </div>
               </div>
             )}
           </div>
+          {state.room.settings.allowReactions && (
+            <div className="h-24" aria-hidden="true" />
+          )}
         </section>
       ) : (
         <section className="mt-12">
@@ -240,22 +245,27 @@ export function ParticipantPage() {
       <nav
         aria-label="Reactions"
         className="fixed inset-x-0 bottom-0 z-20 mx-auto flex max-w-md
-          items-center justify-around border-t-2 border-[var(--ink)]
-          bg-[var(--paper)] px-4 pt-3"
+          items-center justify-around gap-2 border-t-2 border-[var(--ink)]
+          bg-[var(--paper)] px-3 pt-3"
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
-        {REACTIONS.map((reaction) => (
-          <button
+        {REACTION_DOCK.map((reaction) => (
+          <motion.button
             key={reaction.kind}
+            type="button"
+            whileTap={{ scale: 0.86 }}
             onClick={() => react(reaction.kind)}
             disabled={!session}
             aria-label={`Send ${reaction.kind}`}
+            aria-pressed={pressedKind === reaction.kind}
             className="grid h-14 w-14 place-items-center border-2 border-[var(--ink)]
-              bg-white text-2xl transition-transform active:scale-90 active:bg-[var(--yellow)]
               disabled:opacity-35"
+            style={{
+              background: pressedKind === reaction.kind ? reaction.color : "white",
+            }}
           >
-            {reaction.label}
-          </button>
+            <ReactionStamp kind={reaction.kind} size={28} />
+          </motion.button>
         ))}
       </nav>
       )}

@@ -1,11 +1,12 @@
 import type { RoomSoundMode } from "@roomwave/shared";
 
-type SoundEvent = "ready" | "vote" | "lock" | "reveal" | "join";
+type SoundEvent = "ready" | "vote" | "lock" | "reveal" | "join" | "react";
 
 let context: AudioContext | null = null;
 // Master gain keeps stacked bursts from clipping: every note routes through
 // one node instead of N oscillators summing straight into the destination.
 let masterGain: GainNode | null = null;
+let boundMode: RoomSoundMode = "off";
 const STORAGE_KEY = "roomwave:sound-enabled";
 const memoryStore = new Map<string, string>();
 
@@ -25,12 +26,17 @@ function storageSet(key: string, value: string) {
   }
 }
 
+export function bindRoomSound(mode: RoomSoundMode) {
+  boundMode = mode;
+}
+
 export function isSoundEnabled() {
   return storageGet(STORAGE_KEY) === "true";
 }
 
 export function setSoundEnabled(enabled: boolean, mode: RoomSoundMode) {
   storageSet(STORAGE_KEY, String(enabled));
+  bindRoomSound(mode);
   if (enabled) {
     context ??= new AudioContext();
     masterGain ??= context.createGain();
@@ -41,6 +47,10 @@ export function setSoundEnabled(enabled: boolean, mode: RoomSoundMode) {
   } else if (context) {
     void context.suspend();
   }
+}
+
+export function playBoundSound(event: SoundEvent) {
+  playRoomSound(boundMode, event);
 }
 
 export function playRoomSound(mode: RoomSoundMode, event: SoundEvent) {
@@ -61,6 +71,7 @@ export function playRoomSound(mode: RoomSoundMode, event: SoundEvent) {
     vote: [520],
     lock: [240, 180],
     reveal: [260, 390, 620],
+    react: [880, 1180],
   };
   const notes = patterns[event];
   const now = context.currentTime;

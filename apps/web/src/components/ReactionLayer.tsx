@@ -1,7 +1,12 @@
-import type { ReactionKind } from "@roomwave/shared";
+import type { ReactionBurst, ReactionKind } from "@roomwave/shared";
 
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
+
+import { REACTION_COLORS } from "../lib/reactions";
+import { ReactionStamp } from "./ReactionStamp";
+
+/* oxlint-disable react-hooks/exhaustive-deps -- ingest is a render-local burst helper */
 
 /**
  * Bounded live-reaction swarm.
@@ -28,77 +33,88 @@ interface Pulse {
   extra: number;
 }
 
-const GLYPHS: Record<ReactionKind, string> = {
-  spark: "✦",
-  flame: "▲",
-  clap: "■",
-  wave: "〜",
-  bolt: "⟋",
-};
-
-const COLORS: Record<ReactionKind, string> = {
-  spark: "var(--yellow)",
-  flame: "var(--red)",
-  clap: "var(--blue)",
-  wave: "var(--green)",
-  bolt: "var(--violet)",
-};
-
 let nextId = 1;
 
 export function ReactionLayer({
   burst,
+  localBurst,
 }: {
-  burst: { kind: ReactionKind; count: number; bucket: number } | null;
+  burst: ReactionBurst | null;
+  /** Instant particle from the sender's own tap, before the SSE bucket lands. */
+  localBurst?: ReactionBurst | null;
 }) {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [pulse, setPulse] = useState<Pulse | null>(null);
   const seenBursts = useRef<string[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const lastLocal = useRef<{ kind: ReactionKind; at: number } | null>(null);
   const shouldReduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    if (!burst) return;
+  function ingest(next: ReactionBurst | null, source: "server" | "local") {
+    if (!next) return;
     if (typeof document !== "undefined" && document.hidden) return;
-    const burstKey = `${burst.bucket}:${burst.kind}`;
+    const burstKey = `${next.bucket}:${next.kind}:${source}`;
     if (seenBursts.current.includes(burstKey)) return;
     seenBursts.current = [...seenBursts.current.slice(-63), burstKey];
 
+    if (source === "local") {
+      lastLocal.current = { kind: next.kind, at: Date.now() };
+    } else if (
+      lastLocal.current &&
+      lastLocal.current.kind === next.kind &&
+      Date.now() - lastLocal.current.at < 1400
+    ) {
+      lastLocal.current = null;
+      return;
+    }
+
     if (shouldReduceMotion) {
       // oxlint-disable-next-line react/set-state-in-effect -- prop-driven visual event
-      setPulse({ id: nextId++, kind: burst.kind, extra: burst.count });
+      setPulse({ id: nextId++, kind: next.kind, extra: next.count });
       return;
     }
 
     const room = MAX_PARTICLES - particlesRef.current.length;
-    const spawn = Math.min(burst.count, Math.max(0, room));
+    const spawn = Math.min(next.count, Math.max(0, room));
     const fresh: Particle[] = Array.from({ length: spawn }, () => ({
       id: nextId++,
-      kind: burst.kind,
+      kind: next.kind,
       x: 8 + Math.random() * 84,
       drift: -30 + Math.random() * 60,
     }));
 
-    const next = [
+    const stacked = [
       ...particlesRef.current.slice(-(MAX_PARTICLES - fresh.length)),
       ...fresh,
     ];
-    particlesRef.current = next;
-    setParticles(next);
+    particlesRef.current = stacked;
+    setParticles(stacked);
 
-    if (spawn < burst.count) {
+    if (spawn < next.count) {
       setPulse({
         id: nextId++,
-        kind: burst.kind,
-        extra: burst.count - spawn,
+        kind: next.kind,
+        extra: next.count - spawn,
       });
     }
+  }
+
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- ingest is a render-local helper
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- local tap is an external visual event
+    ingest(localBurst ?? null, "local");
+  }, [localBurst, shouldReduceMotion]);
+
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- ingest is a render-local helper
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- SSE burst is an external visual event
+    ingest(burst, "server");
   }, [burst, shouldReduceMotion]);
 
   function removeParticle(id: number) {
-    const next = particlesRef.current.filter((candidate) => candidate.id !== id);
-    particlesRef.current = next;
-    setParticles(next);
+    const stacked = particlesRef.current.filter((candidate) => candidate.id !== id);
+    particlesRef.current = stacked;
+    setParticles(stacked);
   }
 
   return (
@@ -113,12 +129,12 @@ export function ReactionLayer({
           className="absolute bottom-6 text-3xl"
           style={{
             left: `${particle.x}%`,
-            color: COLORS[particle.kind],
+            color: REACTION_COLORS[particle.kind],
             animation: "rw-rise 2.2s ease-out forwards",
             ["--rw-drift" as string]: `${particle.drift}px`,
           }}
         >
-          {GLYPHS[particle.kind]}
+          <ReactionStamp kind={particle.kind} size={36} />
         </span>
       ))}
 
@@ -131,12 +147,11 @@ export function ReactionLayer({
               pulse.extra >= 12 ? "text-3xl" : "text-xl"
             }`}
           style={{
-            color: COLORS[pulse.kind],
+            color: REACTION_COLORS[pulse.kind],
             animation: "rw-pulse 1.4s ease-out forwards",
           }}
         >
           +{pulse.extra}
-          {/* Combo: a big burst gets a shout, not more nodes. */}
           {pulse.extra >= 12 && (
             <span className="mono-tag ml-2 text-[var(--ink)]">combo!</span>
           )}

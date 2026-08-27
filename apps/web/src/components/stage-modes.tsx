@@ -15,6 +15,7 @@ import {
   RealityBenderStage,
   ShadowCouncilStage,
 } from "./signature-stage-modes";
+import { ChipStackStage, FistFiveStage, OverUnderStage } from "./arcade-modes";
 import { onSurface } from "./surface-color";
 
 const OPTION_COLORS = [
@@ -75,11 +76,19 @@ export function PulseChoiceStage({
   const emphasized = winner ?? leader;
 
   return (
-    <div className="space-y-6">
-      {rows.map((row) => (
+    <div className="space-y-5 md:space-y-6">
+      {(!aggregate || aggregate.total === 0) && (
+        <p className="border-2 border-[var(--ink)] bg-[var(--paper-deep)] px-4 py-3 font-black">
+          Waiting for the first tap. Lanes fill as votes land.
+        </p>
+      )}
+      {rows.map((row) => {
+        const color = OPTION_COLORS[row.index % OPTION_COLORS.length];
+        const isLead = Boolean(emphasized && emphasized.id === row.id && aggregate && aggregate.total > 0);
+        return (
         <div key={row.id}>
           <div className="mb-1 flex items-baseline justify-between gap-4">
-            <span className="text-2xl font-bold md:text-3xl">
+            <span className="min-w-0 text-xl font-bold md:text-3xl">
               {row.label}
             </span>
             <AnimatedStat
@@ -89,21 +98,32 @@ export function PulseChoiceStage({
             />
           </div>
 
-          <div className="relative h-10 border-2 border-[var(--ink)] bg-[var(--paper-deep)] md:h-12">
-            {/* Lane ticks make the rail read as a scoreboard track. */}
+          <div
+            className={`relative border-2 border-[var(--ink)] bg-[var(--paper-deep)] segment-rail ${isLead ? "h-12 md:h-14 block-shadow-sm" : "h-9 md:h-12"}`}
+          >
             <motion.div
               initial={false}
               animate={{ width: `${(row.count / max) * 100}%` }}
-              transition={{ type: "spring", stiffness: 120, damping: 20 }}
-              className="absolute inset-y-0 left-0 border-r-2 border-[var(--ink)]"
+              transition={respectMotion({ type: "spring", stiffness: 120, damping: 20 })}
+              className="absolute inset-y-0 left-0 flex items-center justify-end border-r-2 border-[var(--ink)] pr-2"
               style={{
-                background: OPTION_COLORS[row.index % OPTION_COLORS.length],
+                background: color,
                 opacity: emphasized && emphasized.id !== row.id ? 0.55 : 1,
               }}
-            />
+            >
+              {row.count > 0 && (
+                <span
+                  className="text-sm font-black tabular-nums md:text-base"
+                  style={{ color: onSurface(color) }}
+                >
+                  {row.count}
+                </span>
+              )}
+            </motion.div>
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {leader && aggregate && aggregate.total > 0 && (
         <motion.p
@@ -119,7 +139,7 @@ export function PulseChoiceStage({
       )}
 
       {aggregate?.consensus != null && (
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 pt-2">
+        <div className="grid grid-cols-1 items-center gap-2 pt-2 sm:grid-cols-[auto_1fr_auto] sm:gap-4">
           <span className="mono-tag text-[var(--ink-soft)]">room agreement</span>
           <div className="h-2 border border-[var(--ink)] bg-[var(--paper-deep)]">
             <motion.div
@@ -913,6 +933,27 @@ export function ModeStagePresentation({
       return <CipherRoomStage activity={activity} aggregate={aggregate?.type === "cipher-room" ? aggregate : null} />;
     case "shadow-council":
       return <ShadowCouncilStage activity={activity} aggregate={aggregate?.type === "shadow-council" ? aggregate : null} />;
+    case "chip-stack":
+      return (
+        <ChipStackStage
+          activity={activity}
+          aggregate={aggregate?.type === "chip-stack" ? aggregate : null}
+        />
+      );
+    case "over-under":
+      return (
+        <OverUnderStage
+          activity={activity}
+          aggregate={aggregate?.type === "over-under" ? aggregate : null}
+        />
+      );
+    case "fist-five":
+      return (
+        <FistFiveStage
+          activity={activity}
+          aggregate={aggregate?.type === "fist-five" ? aggregate : null}
+        />
+      );
     default:
       return null;
   }

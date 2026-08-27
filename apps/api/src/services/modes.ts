@@ -33,6 +33,9 @@ import {
   createFutureForkSchema,
   createCipherRoomSchema,
   createShadowCouncilSchema,
+  createChipStackSchema,
+  createOverUnderSchema,
+  createFistFiveSchema,
   pulseChoiceResponseSchema,
   spectrumResponseSchema,
   predictionResponseSchema,
@@ -49,6 +52,9 @@ import {
   futureForkResponseSchema,
   cipherRoomResponseSchema,
   shadowCouncilResponseSchema,
+  chipStackResponseSchema,
+  overUnderResponseSchema,
+  fistFiveResponseSchema,
 } from "@roomwave/shared";
 
 import { and, asc, count, eq, gte } from "drizzle-orm";
@@ -56,6 +62,7 @@ import { and, asc, count, eq, gte } from "drizzle-orm";
 import { db } from "../db";
 import { responses } from "../db/schema";
 import {
+  budgetConcentration,
   meanAbsoluteError,
   median,
   normalizedEntropy,
@@ -1267,6 +1274,191 @@ const shadowCouncilMode: ModeDefinition<
   },
 };
 
+const chipStackMode: ModeDefinition<
+  "chip-stack",
+  typeof createChipStackSchema,
+  typeof chipStackResponseSchema
+> = {
+  type: "chip-stack",
+  label: "Chip Stack",
+  tagline: "Spend a fixed chip budget across the options",
+  singleResponsePerParticipant: true,
+  createSchema: createChipStackSchema,
+  responseSchema: chipStackResponseSchema,
+  buildConfig: (input) => ({
+    type: "chip-stack" as const,
+    resultsMode: input.resultsMode,
+    chipsPerPerson: input.chipsPerPerson,
+    options: input.options.map((label) => ({
+      id: crypto.randomUUID(),
+      label,
+    })),
+  }),
+  validateResponse: (payload, config) => {
+    if (payload.type !== "chip-stack") return "Wrong mode.";
+    if (config.type !== "chip-stack") return "Wrong mode.";
+    const ids = new Set(config.options.map((option) => option.id));
+    if (payload.allocations.length !== config.options.length) {
+      return "Score every option, even if you spend zero chips on it.";
+    }
+    const seen = new Set<string>();
+    let total = 0;
+    for (const allocation of payload.allocations) {
+      if (!ids.has(allocation.optionId) || seen.has(allocation.optionId)) {
+        return "Each option can appear once.";
+      }
+      seen.add(allocation.optionId);
+      total += allocation.chips;
+    }
+    if (total !== config.chipsPerPerson) {
+      return `Spend exactly ${config.chipsPerPerson} chips.`;
+    }
+    return null;
+  },
+  aggregate: (activityId, config): ActivityAggregate => {
+    if (config.type !== "chip-stack") throw new Error("Config mismatch");
+    const chips = new Map(config.options.map((option) => [option.id, 0]));
+    const answers = loadResponses(activityId)
+      .map((row) => row.payload)
+      .filter(
+        (payload): payload is Extract<ResponsePayload, { type: "chip-stack" }> =>
+          payload.type === "chip-stack",
+      );
+    for (const answer of answers) {
+      for (const allocation of answer.allocations) {
+        if (!chips.has(allocation.optionId)) continue;
+        chips.set(allocation.optionId, (chips.get(allocation.optionId) ?? 0) + allocation.chips);
+      }
+    }
+    const totalChips = [...chips.values()].reduce((sum, value) => sum + value, 0);
+    const options = config.options.map((option) => {
+      const count = chips.get(option.id) ?? 0;
+      return {
+        id: option.id,
+        label: option.label,
+        chips: count,
+        share: totalChips === 0 ? 0 : Math.round((count / totalChips) * 1000) / 10,
+        average: answers.length === 0 ? 0 : Math.round((count / answers.length) * 10) / 10,
+      };
+    });
+    const maxChips = Math.max(0, ...options.map((option) => option.chips));
+    return {
+      type: "chip-stack",
+      total: answers.length,
+      options,
+      concentration: budgetConcentration(options.map((option) => option.chips)),
+      leaderIds:
+        maxChips <= 0
+          ? []
+          : options.filter((option) => option.chips === maxChips).map((option) => option.id),
+    };
+  },
+};
+
+const overUnderMode: ModeDefinition<
+  "over-under",
+  typeof createOverUnderSchema,
+  typeof overUnderResponseSchema
+> = {
+  type: "over-under",
+  label: "Over / Under",
+  tagline: "Bet the room against a published line",
+  singleResponsePerParticipant: true,
+  createSchema: createOverUnderSchema,
+  responseSchema: overUnderResponseSchema,
+  buildConfig: (input) => ({
+    type: "over-under" as const,
+    unit: input.unit,
+    line: input.line,
+    actual: input.actual,
+    timeLimitSeconds: input.timeLimitSeconds,
+    resultsMode: input.resultsMode,
+  }),
+  validateResponse: (payload, config) => {
+    if (payload.type !== "over-under") return "Wrong mode.";
+    if (config.type !== "over-under") return "Wrong mode.";
+    return null;
+  },
+  aggregate: (activityId, config, _state, revealed): ActivityAggregate => {
+    if (config.type !== "over-under") throw new Error("Config mismatch");
+    const answers = loadResponses(activityId)
+      .map((row) => row.payload)
+      .filter(
+        (payload): payload is Extract<ResponsePayload, { type: "over-under" }> =>
+          payload.type === "over-under",
+      );
+    const overCount = answers.filter((answer) => answer.side === "over").length;
+    const underCount = answers.length - overCount;
+    const actual = revealed ? config.actual : null;
+    const overWins =
+      actual === null ? null : actual > config.line;
+    const accuracy =
+      overWins === null || answers.length === 0
+        ? null
+        : Math.round(
+            (answers.filter((answer) => (overWins ? answer.side === "over" : answer.side === "under")).length /
+              answers.length) *
+              100,
+          );
+    return {
+      type: "over-under",
+      total: answers.length,
+      line: config.line,
+      overCount: revealed || config.resultsMode === "live" ? overCount : 0,
+      underCount: revealed || config.resultsMode === "live" ? underCount : 0,
+      overShare:
+        answers.length === 0 || (!revealed && config.resultsMode === "blind")
+          ? 0
+          : Math.round((overCount / answers.length) * 1000) / 10,
+      averageConfidence: Math.round(mean(answers.map((answer) => answer.confidence))),
+      actual,
+      overWins,
+      accuracy,
+    };
+  },
+};
+
+const fistFiveMode: ModeDefinition<
+  "fist-five",
+  typeof createFistFiveSchema,
+  typeof fistFiveResponseSchema
+> = {
+  type: "fist-five",
+  label: "Fist Five",
+  tagline: "Hold up a number. The room shows its hands.",
+  singleResponsePerParticipant: true,
+  createSchema: createFistFiveSchema,
+  responseSchema: fistFiveResponseSchema,
+  buildConfig: (input) => ({
+    type: "fist-five" as const,
+    lowLabel: input.lowLabel,
+    highLabel: input.highLabel,
+    resultsMode: input.resultsMode,
+  }),
+  validateResponse: (payload) =>
+    payload.type === "fist-five" ? null : "Wrong mode.",
+  aggregate: (activityId, config): ActivityAggregate => {
+    if (config.type !== "fist-five") throw new Error("Config mismatch");
+    const counts: [number, number, number, number, number, number] = [0, 0, 0, 0, 0, 0];
+    const values = loadResponses(activityId)
+      .map((row) => row.payload)
+      .filter(
+        (payload): payload is Extract<ResponsePayload, { type: "fist-five" }> =>
+          payload.type === "fist-five",
+      )
+      .map((payload) => Math.max(0, Math.min(5, payload.value)));
+    for (const value of values) counts[value] += 1;
+    const sum = values.reduce((total, value) => total + value, 0);
+    return {
+      type: "fist-five",
+      total: values.length,
+      counts,
+      median: median(values),
+      mean: values.length === 0 ? null : Math.round((sum / values.length) * 10) / 10,
+    };
+  },
+};
+
 const modes: Record<ActivityType, ModeDefinition<any, any, any>> = {
   "pulse-choice": pulseChoiceMode,
   spectrum: spectrumMode,
@@ -1284,6 +1476,9 @@ const modes: Record<ActivityType, ModeDefinition<any, any, any>> = {
   "future-fork": futureForkMode,
   "cipher-room": cipherRoomMode,
   "shadow-council": shadowCouncilMode,
+  "chip-stack": chipStackMode,
+  "over-under": overUnderMode,
+  "fist-five": fistFiveMode,
 };
 
 export function getMode(type: ActivityType) {

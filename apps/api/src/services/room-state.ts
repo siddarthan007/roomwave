@@ -109,6 +109,16 @@ function toPublicActivity(activity: Activity): PublicActivity {
     };
   }
 
+  if (activity.config.type === "over-under") {
+    return {
+      ...activity,
+      config: {
+        ...activity.config,
+        actual: null,
+      },
+    };
+  }
+
   if (activity.config.type !== "prediction") return activity;
 
   return {

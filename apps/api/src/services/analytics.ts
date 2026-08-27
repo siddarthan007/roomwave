@@ -58,3 +58,21 @@ export function meanAbsoluteError(
   );
   return sum / values.length;
 }
+
+/**
+ * Normalized Herfindahl concentration of a budget, 0..100.
+ * 0 = chips split evenly, 100 = every chip on one option.
+ */
+export function budgetConcentration(counts: readonly number[]): number | null {
+  const total = counts.reduce((sum, value) => sum + value, 0);
+  if (total <= 0 || counts.length <= 1) return null;
+  let hhi = 0;
+  for (const count of counts) {
+    const share = count / total;
+    hhi += share * share;
+  }
+  const floor = 1 / counts.length;
+  const span = 1 - floor;
+  if (span <= 0) return 100;
+  return Math.round(((hhi - floor) / span) * 100);
+}

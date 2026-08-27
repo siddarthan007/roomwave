@@ -98,6 +98,8 @@ export function Field({
   maxLength,
   autoComplete,
   inputMode,
+  min,
+  max,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -107,6 +109,8 @@ export function Field({
   maxLength?: number;
   autoComplete?: string;
   inputMode?: "text" | "numeric" | "decimal" | "email" | "tel" | "search" | "url" | "none";
+  min?: number;
+  max?: number;
 }) {
   return (
     <label className="block">
@@ -120,6 +124,8 @@ export function Field({
         maxLength={maxLength}
         autoComplete={autoComplete}
         inputMode={inputMode}
+        min={min}
+        max={max}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}

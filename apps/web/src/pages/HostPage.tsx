@@ -1,5 +1,11 @@
 import type { ActivityState, ActivityType, RoomSettings } from "@roomwave/shared";
-import { activityRequiresReveal, ROOM_THEMES, timedRoundSeconds } from "@roomwave/shared";
+import {
+  activityRequiresReveal,
+  CHIP_STACK_BUDGET_MAX,
+  CHIP_STACK_BUDGET_MIN,
+  ROOM_THEMES,
+  timedRoundSeconds,
+} from "@roomwave/shared";
 
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -152,7 +158,7 @@ const MODES: {
   {
     type: "chip-stack",
     label: "Chip Stack",
-    tagline: "Spend a fixed chip budget across the options",
+    tagline: "Spend a chip budget across the options",
     color: "var(--orange)",
   },
   {
@@ -338,8 +344,8 @@ export function HostPage() {
     (mode !== "chip-stack" ||
       (cleanedOptions.length >= 2 &&
         Number.isInteger(Number(chipsPerPerson)) &&
-        Number(chipsPerPerson) >= 3 &&
-        Number(chipsPerPerson) <= 20)) &&
+        Number(chipsPerPerson) >= CHIP_STACK_BUDGET_MIN &&
+        Number(chipsPerPerson) <= CHIP_STACK_BUDGET_MAX)) &&
     (mode !== "over-under" ||
       (Boolean(unit.trim()) && Number.isFinite(Number(lineValue)))) &&
     (mode !== "rank-race" || cleanedOptions.length >= 3) &&
@@ -1173,12 +1179,21 @@ export function HostPage() {
             )}
 
             {mode === "chip-stack" && (
-              <Field
-                label="chips each person must spend"
-                type="number"
-                value={chipsPerPerson}
-                onChange={setChipsPerPerson}
-              />
+              <div className="space-y-2">
+                <Field
+                  label="chips each person spends"
+                  type="number"
+                  inputMode="numeric"
+                  min={CHIP_STACK_BUDGET_MIN}
+                  max={CHIP_STACK_BUDGET_MAX}
+                  value={chipsPerPerson}
+                  onChange={setChipsPerPerson}
+                />
+                <p className="mono-tag text-[var(--ink-soft)]">
+                  any whole number from {CHIP_STACK_BUDGET_MIN} to{" "}
+                  {CHIP_STACK_BUDGET_MAX.toLocaleString("en-US")}. 10 is a starting point.
+                </p>
+              </div>
             )}
 
             {mode === "over-under" && (

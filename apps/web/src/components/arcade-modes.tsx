@@ -50,15 +50,18 @@ export function ChipStackInput({ activity, token }: CommonProps) {
     if (ok) setSealed(true);
   }
 
-  function bump(optionId: string, delta: number) {
+  function assign(optionId: string, wanted: number) {
+    if (!Number.isFinite(wanted)) return;
     setChips((current) => {
-      const value = current[optionId] ?? 0;
-      const nextValue = Math.max(0, value + delta);
-      const nextSpent = Object.entries(current).reduce(
-        (sum, [id, count]) => sum + (id === optionId ? nextValue : count),
+      const others = Object.entries(current).reduce(
+        (sum, [id, count]) => sum + (id === optionId ? 0 : count),
         0,
       );
-      if (nextSpent > config.chipsPerPerson) return current;
+      const nextValue = Math.max(
+        0,
+        Math.min(Math.trunc(wanted), config.chipsPerPerson - others),
+      );
+      if (nextValue === (current[optionId] ?? 0)) return current;
       return { ...current, [optionId]: nextValue };
     });
     setSealed(false);
@@ -66,60 +69,88 @@ export function ChipStackInput({ activity, token }: CommonProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between border-2 border-[var(--ink)] bg-[var(--yellow)] px-4 py-3" aria-live="polite">
+      <div
+        className="flex items-end justify-between gap-3 border-2 border-[var(--ink)] bg-[var(--yellow)] px-4 py-3"
+        aria-live="polite"
+        aria-label={`${remaining} of ${config.chipsPerPerson} chips left`}
+      >
         <span className="mono-tag">chips left</span>
-        <span className="display text-5xl tabular-nums">{remaining}</span>
+        <span className="text-right">
+          <span className="display text-5xl tabular-nums">{remaining}</span>
+          <span className="mono-tag ml-2">of {config.chipsPerPerson}</span>
+        </span>
       </div>
 
-      {config.options.map((option, index) => (
-        <div
-          key={option.id}
-          className="flex items-center gap-3 border-2 border-[var(--ink)] bg-[var(--paper)] p-3"
-        >
-          <span
-            aria-hidden="true"
-            className="grid h-10 w-10 shrink-0 place-items-center border-2 border-[var(--ink)] font-black"
-            style={{ background: CHIP_COLORS[index % CHIP_COLORS.length] }}
+      {config.options.map((option, index) => {
+        const count = chips[option.id] ?? 0;
+        return (
+          <div
+            key={option.id}
+            className="border-2 border-[var(--ink)] bg-[var(--paper)] p-3"
           >
-            {String.fromCharCode(65 + index)}
-          </span>
-          <p className="min-w-0 flex-1 text-lg font-black leading-tight">{option.label}</p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-label={`Remove a chip from ${option.label}`}
-              disabled={pending || (chips[option.id] ?? 0) === 0}
-              onClick={() => bump(option.id, -1)}
-              className="press-plate grid h-12 w-12 place-items-center border-2 border-[var(--ink)] bg-white text-2xl font-black"
-            >
-              −
-            </button>
-            <span className="display w-8 text-center text-3xl tabular-nums">
-              {chips[option.id] ?? 0}
-            </span>
-            <button
-              type="button"
-              aria-label={`Add a chip to ${option.label}`}
-              disabled={pending || remaining <= 0}
-              onClick={() => bump(option.id, 1)}
-              className="press-plate grid h-12 w-12 place-items-center border-2 border-[var(--ink)] bg-[var(--ink)] text-2xl font-black text-[var(--on-ink)]"
-            >
-              +
-            </button>
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="grid h-10 w-10 shrink-0 place-items-center border-2 border-[var(--ink)] font-black"
+                style={{ background: CHIP_COLORS[index % CHIP_COLORS.length] }}
+              >
+                {String.fromCharCode(65 + index)}
+              </span>
+              <p className="min-w-0 flex-1 text-lg font-black leading-tight">{option.label}</p>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                aria-label={`Remove a chip from ${option.label}`}
+                disabled={pending || count === 0}
+                onClick={() => assign(option.id, count - 1)}
+                className="press-plate grid h-12 w-12 shrink-0 place-items-center border-2 border-[var(--ink)] bg-white text-2xl font-black"
+              >
+                −
+              </button>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                aria-label={`${option.label} chips`}
+                disabled={pending}
+                value={count}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => {
+                  const digits = event.target.value.replace(/\D/g, "");
+                  assign(option.id, digits === "" ? 0 : Number(digits));
+                }}
+                className="display h-12 min-w-0 flex-1 border-2 border-[var(--ink)] bg-white text-center text-3xl tabular-nums focus:shadow-[4px_4px_0_var(--ink)]"
+              />
+              <button
+                type="button"
+                aria-label={`Add a chip to ${option.label}`}
+                disabled={pending || remaining <= 0}
+                onClick={() => assign(option.id, count + 1)}
+                className="press-plate grid h-12 w-12 shrink-0 place-items-center border-2 border-[var(--ink)] bg-[var(--ink)] text-2xl font-black text-[var(--on-ink)]"
+              >
+                +
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
+      {remaining !== 0 && (
+        <p className="mono-tag text-[var(--ink-soft)]">
+          {remaining} still to place before lock
+        </p>
+      )}
       <button
         type="button"
         disabled={pending || remaining !== 0}
         onClick={() => void commit()}
-        className="press-plate block-shadow-sm sticky bottom-24 z-10 min-h-14 w-full border-2 border-[var(--ink)] bg-[var(--red)] px-5 text-lg font-black uppercase text-[var(--on-red)] disabled:opacity-40"
+        className="press-plate block-shadow-sm min-h-14 w-full border-2 border-[var(--ink)] bg-[var(--red)] px-5 text-lg font-black uppercase text-[var(--on-red)] disabled:opacity-40"
       >
         {sealed ? "update my stack" : "lock the spend"}
       </button>
       {sealed && remaining === 0 && (
-        <p className="mono-tag text-[var(--green)]">In the room. Change any stack before lock.</p>
+        <p className="mono-tag text-[var(--green)]">In the room. Change a stack and lock again.</p>
       )}
       {error && <ErrorNote message={error} />}
     </div>
@@ -187,7 +218,7 @@ export function OverUnderInput({ activity, token }: CommonProps) {
             if (ok) setSealed(true);
           });
         }}
-        className="press-plate block-shadow-sm sticky bottom-24 z-10 min-h-14 w-full border-2 border-[var(--ink)] bg-[var(--yellow)] px-5 text-lg font-black uppercase disabled:opacity-40"
+        className="press-plate block-shadow-sm min-h-14 w-full border-2 border-[var(--ink)] bg-[var(--yellow)] px-5 text-lg font-black uppercase disabled:opacity-40"
       >
         {sealed ? "update my side" : "take the side"}
       </button>
@@ -318,9 +349,11 @@ export function ChipStackStage({
                   />
                 ))}
               </div>
-              <p className="mono-tag mt-3">
-                {row.chips} chips
-                {leaderIds.has(row.id) ? " · leading" : ""}
+              <p className="mt-3 flex items-baseline gap-2">
+                <AnimatedStat value={row.chips} className="display text-2xl" />
+                <span className="mono-tag">
+                  chips{leaderIds.has(row.id) ? " · leading" : ""}
+                </span>
               </p>
             </div>
           );

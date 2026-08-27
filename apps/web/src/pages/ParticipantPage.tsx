@@ -191,7 +191,7 @@ export function ParticipantPage() {
               />
             </div>
           )}
-          <div className="mt-10">
+          <div className="mx-auto mt-10 w-full max-w-md">
             {session ? (
               <ModeParticipantInput
                 key={activity.id}

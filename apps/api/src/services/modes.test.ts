@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
-import type {
-  ActivityConfig,
-  ActivityType,
-  ResponsePayload,
+import {
+  createChipStackSchema,
+  type ActivityConfig,
+  type ActivityType,
+  type ResponsePayload,
 } from "@roomwave/shared";
 
 import { db } from "../db";
@@ -732,6 +733,60 @@ describe("chip-stack mode", () => {
           ],
         },
       ).ok,
+    ).toBe(false);
+  });
+
+  test("accepts a large per-person budget", () => {
+    const left = "11111111-1111-1111-1111-111111111111";
+    const right = "22222222-2222-2222-2222-222222222222";
+    const config: ActivityConfig = {
+      type: "chip-stack",
+      options: [
+        { id: left, label: "Labs" },
+        { id: right, label: "Talks" },
+      ],
+      chipsPerPerson: 100,
+      resultsMode: "live",
+    };
+    seedActivity("chip-stack", config);
+    seedParticipants(1);
+    submit(
+      {
+        type: "chip-stack",
+        allocations: [
+          { optionId: left, chips: 64 },
+          { optionId: right, chips: 36 },
+        ],
+      },
+      0,
+    );
+    const aggregate = aggregateActivity({
+      id: activityId,
+      type: "chip-stack",
+      state: "live",
+      config,
+    });
+    expect(aggregate.type).toBe("chip-stack");
+    if (aggregate.type !== "chip-stack") return;
+    expect(aggregate.options.find((option) => option.id === left)?.chips).toBe(64);
+
+    expect(
+      createChipStackSchema.parse({
+        type: "chip-stack",
+        prompt: "Where does the budget go?",
+        options: ["Labs", "Talks"],
+        chipsPerPerson: 100,
+        resultsMode: "live",
+      }).chipsPerPerson,
+    ).toBe(100);
+    expect(
+      createChipStackSchema.safeParse({
+        type: "chip-stack",
+        prompt: "Where does the budget go?",
+        options: ["Labs", "Talks"],
+        chipsPerPerson: 10_000,
+        resultsMode: "live",
+      }).success,
     ).toBe(false);
   });
 });

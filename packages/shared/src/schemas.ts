@@ -240,6 +240,9 @@ export const createShadowCouncilSchema = z
     }
   });
 
+export const CHIP_STACK_BUDGET_MIN = 1;
+export const CHIP_STACK_BUDGET_MAX = 9_999;
+
 export const createChipStackSchema = z.object({
   type: z.literal("chip-stack"),
   prompt: z.string().trim().min(1, "Question is required").max(160),
@@ -247,7 +250,12 @@ export const createChipStackSchema = z.object({
     .array(z.string().trim().min(1, "Option cannot be empty").max(80))
     .min(2, "At least two options are required")
     .max(6, "Maximum six options"),
-  chipsPerPerson: z.number().int().min(3).max(20).default(10),
+  chipsPerPerson: z
+    .number()
+    .int()
+    .min(CHIP_STACK_BUDGET_MIN)
+    .max(CHIP_STACK_BUDGET_MAX)
+    .default(10),
   resultsMode: resultsModeSchema,
 });
 
@@ -460,7 +468,7 @@ export const chipStackResponseSchema = z.object({
     .array(
       z.object({
         optionId: z.string().uuid(),
-        chips: z.number().int().min(0).max(20),
+        chips: z.number().int().min(0).max(CHIP_STACK_BUDGET_MAX),
       }),
     )
     .min(2)

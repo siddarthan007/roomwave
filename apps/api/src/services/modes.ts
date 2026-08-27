@@ -1281,7 +1281,7 @@ const chipStackMode: ModeDefinition<
 > = {
   type: "chip-stack",
   label: "Chip Stack",
-  tagline: "Spend a fixed chip budget across the options",
+  tagline: "Spend a chip budget across the options",
   singleResponsePerParticipant: true,
   createSchema: createChipStackSchema,
   responseSchema: chipStackResponseSchema,

@@ -142,15 +142,15 @@ export function SpectrumInput({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between">
-        <span className="max-w-[40%] text-lg font-bold">{config.lowLabel}</span>
+      <div className="flex justify-between gap-3">
+        <span className="min-w-0 max-w-[40%] break-words text-lg font-bold">{config.lowLabel}</span>
         <span
           className="display text-4xl tabular-nums transition-colors"
           style={{ color: committed !== null ? "var(--green)" : "var(--ink)" }}
         >
           {Math.round(value / 10)}
         </span>
-        <span className="max-w-[40%] text-right text-lg font-bold">
+        <span className="min-w-0 max-w-[40%] break-words text-right text-lg font-bold">
           {config.highLabel}
         </span>
       </div>
@@ -219,9 +219,12 @@ export function PredictionInput({
     { type: "prediction" }
   >;
 
-  const [text, setText] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{ value: number }>();
+  const [text, setText] = useState(
+    restored && Number.isFinite(restored.value) ? String(restored.value) : "",
+  );
+  const [submitted, setSubmitted] = useState(Boolean(restored));
 
   const numeric = Number(text);
   const valid =
@@ -409,7 +412,7 @@ function SortableRankItem({
       layout
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 border-2 border-[var(--ink)] bg-white p-3 ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-2 border-[var(--ink)] bg-white p-3 sm:gap-3 ${
         isDragging ? "relative z-10 block-shadow" : "block-shadow-sm"
       }`}
     >
@@ -418,11 +421,11 @@ function SortableRankItem({
         {...attributes}
         {...listeners}
         aria-label={`Drag ${label}, currently rank ${index + 1}`}
-        className="display grid h-12 w-12 touch-none place-items-center border-2 border-[var(--ink)] bg-[var(--yellow)] text-2xl"
+        className="display grid h-12 w-12 shrink-0 touch-none place-items-center border-2 border-[var(--ink)] bg-[var(--yellow)] text-2xl"
       >
         {index + 1}
       </button>
-      <span className="text-lg font-black">{label}</span>
+      <span className="min-w-0 break-words text-base font-black leading-tight sm:text-lg">{label}</span>
       <span className="grid grid-cols-2 gap-1">
         <button
           type="button"
@@ -449,9 +452,20 @@ function SortableRankItem({
 
 export function RankRaceInput({ activity, token }: CommonProps) {
   const config = activity.config as Extract<Activity["config"], { type: "rank-race" }>;
-  const [order, setOrder] = useState(() => config.options.map((option) => option.id));
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{ ranks: string[] }>();
+  const optionIds = config.options.map((option) => option.id);
+  const [order, setOrder] = useState(() => {
+    if (
+      restored?.ranks &&
+      restored.ranks.length === optionIds.length &&
+      restored.ranks.every((id) => optionIds.includes(id))
+    ) {
+      return restored.ranks;
+    }
+    return optionIds;
+  });
+  const [submitted, setSubmitted] = useState(Boolean(restored?.ranks));
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 8 } }),
@@ -555,10 +569,10 @@ export function HotTakeInput({ activity, token }: CommonProps) {
   const position = (value + 1000) / 20;
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4 font-black">
-        <span className="max-w-[42%] text-lg">{config.leftLabel}</span>
-        <span className="display text-4xl tabular-nums">{Math.round(Math.abs(value) / 10)}</span>
-        <span className="max-w-[42%] text-right text-lg">{config.rightLabel}</span>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2 font-black">
+        <span className="min-w-0 break-words text-sm leading-tight sm:text-lg">{config.leftLabel}</span>
+        <span className="display text-3xl tabular-nums sm:text-4xl">{Math.round(Math.abs(value) / 10)}</span>
+        <span className="min-w-0 break-words text-right text-sm leading-tight sm:text-lg">{config.rightLabel}</span>
       </div>
       <div
         {...bind()}
@@ -614,9 +628,14 @@ export function HotTakeInput({ activity, token }: CommonProps) {
 export function QuadrantDropInput({ activity, token }: CommonProps) {
   const config = activity.config as Extract<Activity["config"], { type: "quadrant-drop" }>;
   const padRef = useRef<HTMLDivElement>(null);
-  const [point, setPoint] = useState({ x: 500, y: 500 });
-  const [committed, setCommitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{ x: number; y: number }>();
+  const [point, setPoint] = useState(
+    restored && Number.isFinite(restored.x) && Number.isFinite(restored.y)
+      ? { x: restored.x, y: restored.y }
+      : { x: 500, y: 500 },
+  );
+  const [committed, setCommitted] = useState(Boolean(restored));
 
   async function place(next: { x: number; y: number }) {
     const safe = {
@@ -776,10 +795,11 @@ export function QuestionBoardInput({ activity, token, aggregate }: CommonProps) 
 
 export function BeforeAfterInput({ activity, token }: CommonProps) {
   const config = activity.config as Extract<Activity["config"], { type: "before-after" }>;
-  const [before, setBefore] = useState(500);
-  const [after, setAfter] = useState(500);
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{ before: number; after: number }>();
+  const [before, setBefore] = useState(restored?.before ?? 500);
+  const [after, setAfter] = useState(restored?.after ?? 500);
+  const [submitted, setSubmitted] = useState(Boolean(restored));
   return (
     <div className="space-y-6">
       {([
@@ -803,7 +823,10 @@ export function BeforeAfterInput({ activity, token }: CommonProps) {
           />
         </label>
       ))}
-      <div className="flex justify-between text-sm font-black"><span>{config.lowLabel}</span><span>{config.highLabel}</span></div>
+      <div className="flex justify-between gap-3 text-sm font-black">
+        <span className="min-w-0 break-words">{config.lowLabel}</span>
+        <span className="min-w-0 break-words text-right">{config.highLabel}</span>
+      </div>
       <button
         type="button"
         disabled={pending}
@@ -823,10 +846,11 @@ export function BeforeAfterInput({ activity, token }: CommonProps) {
 // ---------------------------------------------------------------------------
 
 export function SignalNoiseInput({ activity, token }: CommonProps) {
-  const [choice, setChoice] = useState<"signal" | "noise" | null>(null);
-  const [confidence, setConfidence] = useState(70);
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{ choice: "signal" | "noise"; confidence: number }>();
+  const [choice, setChoice] = useState<"signal" | "noise" | null>(restored?.choice ?? null);
+  const [confidence, setConfidence] = useState(restored?.confidence ?? 70);
+  const [submitted, setSubmitted] = useState(Boolean(restored?.choice));
 
   return (
     <div className="space-y-6">
@@ -839,7 +863,7 @@ export function SignalNoiseInput({ activity, token }: CommonProps) {
               type="button"
               whileTap={{ scale: 0.96 }}
               onClick={() => setChoice(candidate)}
-              className={`signal-choice min-h-32 border-3 border-[var(--ink)] p-4 text-left block-shadow-sm ${active ? "is-active" : ""}`}
+              className={`signal-choice min-h-28 min-w-0 overflow-hidden border-3 border-[var(--ink)] p-3 text-left block-shadow-sm sm:min-h-32 sm:p-4 ${active ? "is-active" : ""}`}
               style={{
                 background: active
                   ? candidate === "signal"
@@ -851,8 +875,8 @@ export function SignalNoiseInput({ activity, token }: CommonProps) {
                   : "var(--ink)",
               }}
             >
-              <span className="display block text-3xl">{candidate}</span>
-              <span className="mt-3 block text-xs font-bold uppercase tracking-widest opacity-80">
+              <span className="display block break-words text-2xl sm:text-3xl">{candidate}</span>
+              <span className="mt-3 block text-xs font-bold uppercase leading-tight tracking-widest opacity-80">
                 {candidate === "signal" ? "the claim holds" : "something is off"}
               </span>
             </motion.button>
@@ -954,10 +978,12 @@ export function LockedNotice({
   aggregate,
   responseCount,
   resultVisible,
+  showCount = true,
 }: {
   aggregate: ActivityAggregate | null;
   responseCount: number;
   resultVisible: boolean;
+  showCount?: boolean;
 }) {
   return (
     <div className="border-2 border-[var(--ink)] bg-[var(--paper-deep)] p-5 block-shadow-sm">
@@ -969,9 +995,13 @@ export function LockedNotice({
           ? "Look up. The shared result is on stage."
           : "The host is about to reveal what the room thinks."}
       </p>
-      <p className="mono-tag mt-3">
-        {aggregate && "total" in aggregate ? aggregate.total : responseCount} responses
-      </p>
+      {showCount ? (
+        <p className="mono-tag mt-3">
+          {aggregate && "total" in aggregate ? aggregate.total : responseCount} responses
+        </p>
+      ) : (
+        <p className="mono-tag mt-3">the count stays on stage</p>
+      )}
     </div>
   );
 }

@@ -59,10 +59,11 @@ export function RealityBenderInput({ activity, token }: CommonProps) {
     Activity["config"],
     { type: "reality-bender" }
   >;
-  const [personal, setPersonal] = useState(500);
-  const [roomEstimate, setRoomEstimate] = useState(500);
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{ personal: number; roomEstimate: number }>();
+  const [personal, setPersonal] = useState(restored?.personal ?? 500);
+  const [roomEstimate, setRoomEstimate] = useState(restored?.roomEstimate ?? 500);
+  const [submitted, setSubmitted] = useState(Boolean(restored));
 
   return (
     <div className="space-y-6">
@@ -116,10 +117,11 @@ export function LivingConsensusInput({ activity, token }: CommonProps) {
     Activity["config"],
     { type: "living-consensus" }
   >;
-  const [value, setValue] = useState(500);
-  const [confidence, setConfidence] = useState(70);
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{ value: number; confidence: number }>();
+  const [value, setValue] = useState(restored?.value ?? 500);
+  const [confidence, setConfidence] = useState(restored?.confidence ?? 70);
+  const [submitted, setSubmitted] = useState(Boolean(restored));
 
   return (
     <div className="space-y-6">
@@ -205,13 +207,25 @@ export function FutureForkInput({ activity, token }: CommonProps) {
     { type: "future-fork" }
   >;
   const reduceMotion = useReducedMotion();
-  const [beforeBranchId, setBeforeBranchId] = useState<string | null>(null);
-  const [beforeLikelihood, setBeforeLikelihood] = useState(60);
-  const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [afterBranchId, setAfterBranchId] = useState<string | null>(null);
-  const [afterLikelihood, setAfterLikelihood] = useState(60);
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{
+    beforeBranchId: string;
+    beforeLikelihood: number;
+    afterBranchId?: string;
+    afterLikelihood?: number;
+  }>();
+  const [beforeBranchId, setBeforeBranchId] = useState<string | null>(
+    restored?.beforeBranchId ?? null,
+  );
+  const [beforeLikelihood, setBeforeLikelihood] = useState(restored?.beforeLikelihood ?? 60);
+  const [evidenceOpen, setEvidenceOpen] = useState(Boolean(restored?.beforeBranchId));
+  const [afterBranchId, setAfterBranchId] = useState<string | null>(
+    restored?.afterBranchId ?? restored?.beforeBranchId ?? null,
+  );
+  const [afterLikelihood, setAfterLikelihood] = useState(
+    restored?.afterLikelihood ?? restored?.beforeLikelihood ?? 60,
+  );
+  const [submitted, setSubmitted] = useState(Boolean(restored?.afterBranchId));
 
   return (
     <div className="space-y-6">
@@ -309,10 +323,11 @@ export function FutureForkInput({ activity, token }: CommonProps) {
 
 export function CipherRoomInput({ activity, token }: CommonProps) {
   const config = activity.config as Extract<Activity["config"], { type: "cipher-room" }>;
-  const [shift, setShift] = useState(0);
-  const [confidence, setConfidence] = useState(60);
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{ shift: number; confidence: number }>();
+  const [shift, setShift] = useState(restored?.shift ?? 0);
+  const [confidence, setConfidence] = useState(restored?.confidence ?? 60);
+  const [submitted, setSubmitted] = useState(Boolean(restored));
 
   return (
     <div className="space-y-6">
@@ -401,11 +416,22 @@ export function ShadowCouncilInput({ activity, token }: CommonProps) {
     Activity["config"],
     { type: "shadow-council" }
   >;
-  const [points, setPoints] = useState<Record<string, number>>({});
-  const [banishId, setBanishId] = useState<string | null>(null);
-  const [confidence, setConfidence] = useState(70);
-  const [submitted, setSubmitted] = useState(false);
-  const { pending, error, run } = useSubmit(activity, token);
+  const { pending, error, run, restore } = useSubmit(activity, token);
+  const restored = restore<{
+    allocations: Array<{ aliasId: string; points: number }>;
+    banishId: string;
+    confidence: number;
+  }>();
+  const [points, setPoints] = useState<Record<string, number>>(() => {
+    const next: Record<string, number> = {};
+    for (const allocation of restored?.allocations ?? []) {
+      next[allocation.aliasId] = allocation.points;
+    }
+    return next;
+  });
+  const [banishId, setBanishId] = useState<string | null>(restored?.banishId ?? null);
+  const [confidence, setConfidence] = useState(restored?.confidence ?? 70);
+  const [submitted, setSubmitted] = useState(Boolean(restored?.banishId));
   const spent = Object.values(points).reduce((sum, value) => sum + value, 0);
   const remaining = config.suspicionPoints - spent;
 

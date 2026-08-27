@@ -173,6 +173,47 @@ describe("pulse-choice mode", () => {
     expect(agg.options[0].count).toBe(2);
     expect(agg.options[0].percentage).toBeCloseTo(66.7);
     expect(agg.options[1].percentage).toBeCloseTo(33.3);
+    expect(
+      Math.round((agg.options[0].percentage + agg.options[1].percentage) * 10),
+    ).toBe(1000);
+  });
+
+  test("a three-way split of percents still sums to 100", () => {
+    seedActivity("pulse-choice", {
+      type: "pulse-choice",
+      resultsMode: "live",
+      choiceRule: "majority",
+      options: [
+        { id: "11111111-1111-1111-1111-111111111111", label: "A" },
+        { id: "22222222-2222-2222-2222-222222222222", label: "B" },
+        { id: "33333333-3333-3333-3333-333333333333", label: "C" },
+      ],
+    });
+    seedParticipants(3);
+    submit({ type: "pulse-choice", optionId: "11111111-1111-1111-1111-111111111111" }, 0);
+    submit({ type: "pulse-choice", optionId: "22222222-2222-2222-2222-222222222222" }, 1);
+    submit({ type: "pulse-choice", optionId: "33333333-3333-3333-3333-333333333333" }, 2);
+    const agg = aggregateActivity({
+      id: activityId,
+      type: "pulse-choice",
+      state: "live",
+      config: {
+        type: "pulse-choice",
+        resultsMode: "live",
+        choiceRule: "majority",
+        options: [
+          { id: "11111111-1111-1111-1111-111111111111", label: "A" },
+          { id: "22222222-2222-2222-2222-222222222222", label: "B" },
+          { id: "33333333-3333-3333-3333-333333333333", label: "C" },
+        ],
+      },
+    });
+    expect(agg.type).toBe("pulse-choice");
+    if (agg.type !== "pulse-choice") return;
+    expect(agg.options.map((option) => option.percentage)).toEqual([33.4, 33.3, 33.3]);
+    expect(
+      Math.round(agg.options.reduce((sum, option) => sum + option.percentage, 0) * 10),
+    ).toBe(1000);
   });
 
   test("rejects unknown option ids", () => {
@@ -411,6 +452,7 @@ describe("expanded interaction families", () => {
     expect(aggregate.leftWeight).toBe(67);
     expect(aggregate.rightWeight).toBe(33);
     expect(aggregate.centerShare).toBe(33);
+    expect(aggregate.leftWeight + aggregate.rightWeight).toBe(100);
   });
 
   test("Quadrant Drop reports centroid and quadrant shares", () => {
@@ -599,6 +641,12 @@ describe("expanded interaction families", () => {
     expect(aggregate.changedShare).toBe(67);
     expect(aggregate.confidenceShift).toBe(2);
     expect(aggregate.flows).toHaveLength(2);
+    const open = aggregate.branches.find((branch) => branch.id === first);
+    const tight = aggregate.branches.find((branch) => branch.id === second);
+    expect(open?.beforeShare).toBe(50);
+    expect(tight?.beforeShare).toBe(50);
+    expect(open?.afterShare).toBe(50);
+    expect(tight?.afterShare).toBe(50);
   });
 
   test("Cipher Room seals the answer and scores a Caesar shift only on reveal", () => {
@@ -820,6 +868,31 @@ describe("over-under mode", () => {
     expect(revealed.actual).toBe(62);
     expect(revealed.overWins).toBe(true);
     expect(revealed.accuracy).toBe(67);
+  });
+
+  test("a number sitting on the line is a push, not an under win", () => {
+    const config: ActivityConfig = {
+      type: "over-under",
+      unit: "%",
+      line: 40,
+      actual: 40,
+      timeLimitSeconds: 30,
+      resultsMode: "live",
+    };
+    seedActivity("over-under", config);
+    seedParticipants(2);
+    submit({ type: "over-under", side: "over", confidence: 70 }, 0);
+    submit({ type: "over-under", side: "under", confidence: 80 }, 1);
+    const revealed = aggregateActivity({
+      id: activityId,
+      type: "over-under",
+      state: "revealed",
+      config,
+    });
+    expect(revealed.type).toBe("over-under");
+    if (revealed.type !== "over-under") return;
+    expect(revealed.overWins).toBeNull();
+    expect(revealed.accuracy).toBeNull();
   });
 });
 

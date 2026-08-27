@@ -72,6 +72,21 @@ export function getParticipantSession(
   }
 }
 
+function safeRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    memoryStore.delete(key);
+  }
+}
+
+export function clearParticipantSession(roomId: string, roomCode?: string) {
+  safeRemove(`roomwave:participant:${roomId}`);
+  if (roomCode) {
+    safeRemove(`roomwave:join:${roomCode.trim().toUpperCase()}`);
+  }
+}
+
 export function getParticipantSessionForCode(
   roomCode: string,
 ): { roomId: string; session: ParticipantSession } | null {
@@ -165,16 +180,27 @@ export function getJoinDraft(): JoinDraft | null {
   }
 }
 
-function answerKey(activityId: string) {
-  return `roomwave:answer:${activityId}`;
+function answerKey(activityId: string, epoch: number) {
+  return `roomwave:answer:${activityId}:${epoch}`;
 }
 
-export function saveActivityAnswer(activityId: string, payload: unknown) {
-  safeSet(answerKey(activityId), JSON.stringify(payload));
+const LEGACY_ANSWER_KEY = (activityId: string) => `roomwave:answer:${activityId}`;
+
+export function saveActivityAnswer(
+  activityId: string,
+  payload: unknown,
+  epoch = 0,
+) {
+  safeSet(answerKey(activityId, epoch), JSON.stringify(payload));
 }
 
-export function loadActivityAnswer(activityId: string): unknown | null {
-  const raw = safeGet(answerKey(activityId));
+export function loadActivityAnswer(
+  activityId: string,
+  epoch = 0,
+): unknown | null {
+  const raw =
+    safeGet(answerKey(activityId, epoch)) ??
+    (epoch === 0 ? safeGet(LEGACY_ANSWER_KEY(activityId)) : null);
   if (raw === null) return null;
   try {
     return JSON.parse(raw) as unknown;

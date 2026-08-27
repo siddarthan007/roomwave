@@ -755,6 +755,8 @@ roomRoutes.post(
         state:
           "draft",
 
+        responseEpoch: 0,
+
         config,
 
         deadlineAt: null,

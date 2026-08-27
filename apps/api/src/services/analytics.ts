@@ -7,17 +7,17 @@
  * 1 = perfectly even spread (no consensus), lower = more consensus.
  */
 export function normalizedEntropy(counts: number[]): number {
-  const total = counts.reduce((sum, value) => sum + value, 0);
-  if (total <= 0 || counts.length <= 1) return 0;
+  const occupied = counts.filter((count) => count > 0);
+  const total = occupied.reduce((sum, value) => sum + value, 0);
+  if (total <= 0 || occupied.length <= 1) return 0;
 
   let entropy = 0;
-  for (const count of counts) {
-    if (count === 0) continue;
+  for (const count of occupied) {
     const p = count / total;
     entropy -= p * Math.log2(p);
   }
 
-  const maxEntropy = Math.log2(counts.length);
+  const maxEntropy = Math.log2(occupied.length);
   if (maxEntropy === 0) return 0;
   return Math.min(1, Math.max(0, entropy / maxEntropy));
 }

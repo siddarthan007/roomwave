@@ -15,6 +15,7 @@ import type {
   ResponsePayload,
   SpectrumAggregate,
 } from "@roomwave/shared";
+import { apportionPercents } from "@roomwave/shared";
 
 import {
   createPulseChoiceSchema,
@@ -228,18 +229,19 @@ const pulseChoiceMode: ModeDefinition<
         : config.choiceRule === "minority"
           ? Math.min(...populatedCounts)
           : Math.max(...populatedCounts);
+    const shares = apportionPercents(
+      config.options.map((option) => counts.get(option.id) ?? 0),
+      1,
+    );
 
     return {
       type: "pulse-choice",
       total,
-      options: config.options.map((option) => ({
+      options: config.options.map((option, index) => ({
         id: option.id,
         label: option.label,
         count: counts.get(option.id) ?? 0,
-        percentage:
-          total === 0
-            ? 0
-            : Math.round(((counts.get(option.id) ?? 0) / total) * 1000) / 10,
+        percentage: shares[index] ?? 0,
       })),
       consensus:
         total === 0
@@ -410,7 +412,8 @@ const wordBloomMode: ModeDefinition<
         payload.moderation === "hidden"
       ) continue;
       const normalized = payload.text
-        .toLowerCase()
+        .normalize("NFKC")
+        .toLocaleLowerCase()
         .replace(/\s+/g, " ")
         .trim();
       if (!normalized) continue;
@@ -599,13 +602,14 @@ const hotTakeMode: ModeDefinition<
     const leftForce = values.reduce((sum, value) => sum + Math.max(0, -value), 0);
     const rightForce = values.reduce((sum, value) => sum + Math.max(0, value), 0);
     const force = leftForce + rightForce;
+    const leftWeight = force === 0 ? 0 : Math.round((leftForce / force) * 100);
     return {
       type: "hot-take",
       total,
       values: values.slice(-400),
       average: Math.round(average),
-      leftWeight: force === 0 ? 0 : Math.round((leftForce / force) * 100),
-      rightWeight: force === 0 ? 0 : Math.round((rightForce / force) * 100),
+      leftWeight,
+      rightWeight: force === 0 ? 0 : 100 - leftWeight,
       centerShare:
         total === 0
           ? 0
@@ -653,7 +657,9 @@ const quadrantDropMode: ModeDefinition<
           };
     const quadrants: [number, number, number, number] = [0, 0, 0, 0];
     for (const point of points) {
-      const index = point.y >= 500 ? (point.x < 500 ? 0 : 1) : point.x >= 500 ? 2 : 3;
+      const index = point.y >= 500
+        ? point.x < 500 ? 0 : 1
+        : point.x < 500 ? 2 : 3;
       quadrants[index] += 1;
     }
     const distances = centroid
@@ -675,9 +681,12 @@ const quadrantDropMode: ModeDefinition<
       total,
       points: points.slice(-400),
       centroid,
-      quadrantShares: quadrants.map((value) =>
-        total === 0 ? 0 : Math.round((value / total) * 100),
-      ) as [number, number, number, number],
+      quadrantShares: apportionPercents(quadrants) as [
+        number,
+        number,
+        number,
+        number,
+      ],
       outlierCount: distances.filter((value) => value > meanDistance + distanceSpread * 2).length,
     };
   },
@@ -1046,30 +1055,46 @@ const futureForkMode: ModeDefinition<
         answer.afterLikelihood !== undefined,
     );
     const flows = new Map<string, number>();
-    for (const answer of revised) {
-      if (answer.beforeBranchId === answer.afterBranchId) continue;
-      const key = `${answer.beforeBranchId}:${answer.afterBranchId}`;
+    for (const answer of answers) {
+      const afterId = answer.afterBranchId ?? answer.beforeBranchId;
+      if (answer.beforeBranchId === afterId) continue;
+      const key = `${answer.beforeBranchId}:${afterId}`;
       flows.set(key, (flows.get(key) ?? 0) + 1);
     }
     return {
       type: "future-fork",
       total,
       revisedTotal: revised.length,
-      branches: config.branches.map((branch) => {
-        const before = answers.filter((answer) => answer.beforeBranchId === branch.id);
-        const after = revised.filter((answer) => answer.afterBranchId === branch.id);
-        return {
-          id: branch.id,
-          label: branch.label,
-          beforeShare: total === 0 ? 0 : Math.round((before.length / total) * 100),
-          afterShare:
-            revised.length === 0
-              ? 0
-              : Math.round((after.length / revised.length) * 100),
-          beforeLikelihood: Math.round(mean(before.map((answer) => answer.beforeLikelihood))),
-          afterLikelihood: Math.round(mean(after.map((answer) => answer.afterLikelihood))),
-        };
-      }),
+      branches: (() => {
+        const beforeCounts = config.branches.map(
+          (branch) => answers.filter((answer) => answer.beforeBranchId === branch.id).length,
+        );
+        const afterCounts = config.branches.map(
+          (branch) =>
+            answers.filter(
+              (answer) => (answer.afterBranchId ?? answer.beforeBranchId) === branch.id,
+            ).length,
+        );
+        const beforeShares = apportionPercents(beforeCounts);
+        const afterShares = apportionPercents(afterCounts);
+        return config.branches.map((branch, index) => {
+          const before = answers.filter((answer) => answer.beforeBranchId === branch.id);
+          const after = answers.filter(
+            (answer) => (answer.afterBranchId ?? answer.beforeBranchId) === branch.id,
+          );
+          const afterLikelihoods = after.map((answer) =>
+            answer.afterLikelihood ?? answer.beforeLikelihood,
+          );
+          return {
+            id: branch.id,
+            label: branch.label,
+            beforeShare: beforeShares[index] ?? 0,
+            afterShare: afterShares[index] ?? 0,
+            beforeLikelihood: Math.round(mean(before.map((answer) => answer.beforeLikelihood))),
+            afterLikelihood: Math.round(mean(afterLikelihoods)),
+          };
+        });
+      })(),
       flows: [...flows.entries()]
         .map(([key, count]) => {
           const [fromId, toId] = key.split(":");
@@ -1330,14 +1355,15 @@ const chipStackMode: ModeDefinition<
         chips.set(allocation.optionId, (chips.get(allocation.optionId) ?? 0) + allocation.chips);
       }
     }
-    const totalChips = [...chips.values()].reduce((sum, value) => sum + value, 0);
-    const options = config.options.map((option) => {
-      const count = chips.get(option.id) ?? 0;
+    const chipCounts = config.options.map((option) => chips.get(option.id) ?? 0);
+    const shares = apportionPercents(chipCounts, 1);
+    const options = config.options.map((option, index) => {
+      const count = chipCounts[index] ?? 0;
       return {
         id: option.id,
         label: option.label,
         chips: count,
-        share: totalChips === 0 ? 0 : Math.round((count / totalChips) * 1000) / 10,
+        share: shares[index] ?? 0,
         average: answers.length === 0 ? 0 : Math.round((count / answers.length) * 10) / 10,
       };
     });
@@ -1391,7 +1417,7 @@ const overUnderMode: ModeDefinition<
     const underCount = answers.length - overCount;
     const actual = revealed ? config.actual : null;
     const overWins =
-      actual === null ? null : actual > config.line;
+      actual === null || actual === config.line ? null : actual > config.line;
     const accuracy =
       overWins === null || answers.length === 0
         ? null

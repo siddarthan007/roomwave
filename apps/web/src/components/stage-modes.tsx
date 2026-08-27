@@ -4,6 +4,7 @@ import type {
 } from "@roomwave/shared";
 import { AnimatedStat } from "./AnimatedStat";
 
+import { useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { scaleLinear } from "d3-scale";
 import { curveBumpX, line } from "d3-shape";
@@ -18,6 +19,13 @@ import {
 import { ChipStackStage, FistFiveStage, OverUnderStage } from "./arcade-modes";
 import { FillBar } from "./FillBar";
 import { onSurface } from "./surface-color";
+import {
+  bloomAnchors,
+  browserBloomMeasure,
+  layoutWordBloom,
+  type BloomAnchor,
+  type PlacedBloomWord,
+} from "../lib/word-bloom-layout";
 
 const OPTION_COLORS = [
   "var(--red)",
@@ -66,15 +74,26 @@ export function PulseChoiceStage({
   }));
 
   const max = Math.max(1, ...rows.map((row) => row.count));
-  const leader =
+  const liveLeadCount =
     aggregate && aggregate.total > 0
-      ? rows.reduce((best, row) => (row.count > best.count ? row : best))
+      ? config.choiceRule === "minority"
+        ? Math.min(...rows.filter((row) => row.count > 0).map((row) => row.count))
+        : Math.max(...rows.map((row) => row.count))
       : null;
-  const winner =
+  const liveLeadIds = new Set(
+    liveLeadCount === null
+      ? []
+      : rows.filter((row) => row.count > 0 && row.count === liveLeadCount).map((row) => row.id),
+  );
+  const highlightIds =
     aggregate?.winnerOptionIds.length
-      ? rows.find((row) => aggregate.winnerOptionIds.includes(row.id)) ?? null
-      : null;
-  const emphasized = winner ?? leader;
+      ? new Set(aggregate.winnerOptionIds)
+      : liveLeadIds;
+  const winnerLabels = rows
+    .filter((row) => aggregate?.winnerOptionIds.includes(row.id))
+    .map((row) => row.label);
+  const leadLabels = rows.filter((row) => liveLeadIds.has(row.id)).map((row) => row.label);
+  const emphasizedLabel = winnerLabels[0] ?? leadLabels[0] ?? null;
 
   return (
     <div className="space-y-5 md:space-y-6">
@@ -85,7 +104,7 @@ export function PulseChoiceStage({
       )}
       {rows.map((row) => {
         const color = OPTION_COLORS[row.index % OPTION_COLORS.length];
-        const isLead = Boolean(emphasized && emphasized.id === row.id && aggregate && aggregate.total > 0);
+        const isLead = highlightIds.has(row.id) && Boolean(aggregate && aggregate.total > 0);
         const share = (row.count / max) * 100;
         const countOnFill = share >= 22;
         return (
@@ -95,14 +114,14 @@ export function PulseChoiceStage({
               {row.label}
             </span>
             <AnimatedStat
-              value={Math.round(row.percentage)}
+              value={row.percentage}
               suffix="%"
               className="display inline-flex items-baseline gap-[0.1em] text-4xl md:text-5xl"
             />
           </div>
 
           <div
-            className={`relative ${isLead ? "h-12 md:h-14" : "h-9 md:h-12"} ${emphasized && emphasized.id !== row.id ? "opacity-60" : ""}`}
+            className={`relative ${isLead ? "h-12 md:h-14" : "h-9 md:h-12"} ${highlightIds.size > 0 && !isLead ? "opacity-60" : ""}`}
           >
             <FillBar
               share={share}
@@ -130,16 +149,16 @@ export function PulseChoiceStage({
         );
       })}
 
-      {leader && aggregate && aggregate.total > 0 && (
+      {emphasizedLabel && aggregate && aggregate.total > 0 && (
         <motion.p
-          key={leader.id}
+          key={emphasizedLabel}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="mono-tag text-[var(--ink-soft)]"
         >
-          {winner
-            ? `${config.choiceRule === "minority" ? "minority wins" : "winner"} · ${winner.label}`
-            : `leading · ${leader.label}`} · {aggregate.total} responses
+          {winnerLabels.length > 0
+            ? `${config.choiceRule === "minority" ? "minority wins" : "winner"} · ${winnerLabels.join(", ")}`
+            : `leading · ${leadLabels.join(", ")}`} · {aggregate.total} responses
         </motion.p>
       )}
 
@@ -244,14 +263,8 @@ export function SpectrumStage({
 }
 
 // ---------------------------------------------------------------------------
-// Word Bloom: stable keyed terms reflow as a typographic field
+// Word Bloom: packed typographic cloud with stable poses
 // ---------------------------------------------------------------------------
-
-function wordTilt(text: string): number {
-  let hash = 0;
-  for (const character of text) hash = (hash * 31 + character.charCodeAt(0)) | 0;
-  return ((Math.abs(hash) % 7) - 3) * 0.45;
-}
 
 export function WordBloomStage({
   aggregate,
@@ -260,59 +273,98 @@ export function WordBloomStage({
 }) {
   const reduceMotion = useReducedMotion();
   const terms = aggregate?.terms ?? [];
-  const max = Math.max(1, ...terms.map((term) => term.count));
+  const hostRef = useRef<HTMLDivElement>(null);
+  const previous = useRef<Map<string, BloomAnchor>>(new Map());
+  const [frame, setFrame] = useState(() => {
+    if (typeof window === "undefined") return { width: 720, height: 320 };
+    return {
+      width: Math.min(window.innerWidth - 32, 1100),
+      height: Math.min(window.innerHeight * 0.52, 448),
+    };
+  });
+
+  const [placed, setPlaced] = useState<PlacedBloomWord[]>([]);
+  const termsKey = JSON.stringify(
+    terms.map((term) => ({ text: term.text, count: term.count })),
+  );
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (!box || box.width < 40 || box.height < 40) return;
+      setFrame((current) =>
+        Math.abs(current.width - box.width) < 1 &&
+        Math.abs(current.height - box.height) < 1
+          ? current
+          : { width: box.width, height: box.height },
+      );
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [termsKey]);
+
+  useLayoutEffect(() => {
+    const next = layoutWordBloom({
+      terms: JSON.parse(termsKey) as Array<{ text: string; count: number }>,
+      width: frame.width,
+      height: frame.height,
+      previous: previous.current,
+      reduceMotion: Boolean(reduceMotion),
+      measure: browserBloomMeasure,
+    });
+    previous.current = bloomAnchors(next);
+    setPlaced(next);
+  }, [termsKey, frame.width, frame.height, reduceMotion]);
 
   if (terms.length === 0) {
     return <EmptyStageCopy copy="Words will stamp into the room as they arrive." />;
   }
 
+  const aria = terms
+    .map((term) => (term.count > 1 ? `${term.text} ${term.count}` : term.text))
+    .join(", ");
+
   return (
     <div>
-      <motion.div layout className="flex min-h-72 flex-wrap content-center items-center justify-center gap-x-5 gap-y-3 border-y-4 border-[var(--ink)] bg-white px-5 py-8 md:min-h-80">
+      <div
+        ref={hostRef}
+        role="img"
+        aria-label={`Word field: ${aria}`}
+        className="relative isolate min-h-56 overflow-hidden border-y-4 border-[var(--ink)] bg-white sm:min-h-72 md:min-h-80"
+        style={{ height: "min(52vh, 28rem)" }}
+      >
         <AnimatePresence initial={false}>
-          {terms.map((term, index) => {
-          const weight = term.count / max;
-          const size = 24 + weight * 48;
-          return (
-            <motion.div
-              layout
-              key={term.text}
-              initial={
-                reduceMotion ? false : { scale: 0.92, opacity: 0, rotate: -8 }
-              }
-              animate={{
-                scale: 1,
-                opacity: 1,
-                rotate: wordTilt(term.text),
-              }}
-              exit={{ scale: 0.7, opacity: 0 }}
+          {placed.map((word, index) => (
+            <motion.span
+              key={word.text}
+              initial={reduceMotion ? false : { scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
               transition={{
-                layout: { type: "spring", stiffness: 170, damping: 24 },
-                delay: Math.min(index * 0.012, 0.18),
+                type: "spring",
+                stiffness: 280,
+                damping: 26,
+                delay: reduceMotion ? 0 : Math.min(index * 0.018, 0.22),
               }}
-              className="relative border-b-[5px] border-[var(--ink)] px-1 font-black leading-[0.9]"
+              transformTemplate={({ scale }) =>
+                `translate(-50%, -50%) rotate(${word.rotate}deg) scale(${scale ?? 1})`
+              }
+              className="display pointer-events-none absolute origin-center whitespace-nowrap leading-none"
               style={{
-                fontSize: `clamp(1.4rem, ${size / 12}vw, ${size}px)`,
-                color:
-                  index === 0
-                    ? "var(--red)"
-                    : index % 4 === 1
-                      ? "var(--blue)"
-                      : "var(--ink)",
+                left: `calc(50% + ${word.x}px)`,
+                top: `calc(50% + ${word.y}px)`,
+                fontSize: word.fontSize,
+                color: word.color,
               }}
             >
-              {term.text}
-              {term.count > 1 && (
-                <span className="mono-tag ml-2 align-top text-[var(--ink-soft)]">
-                  ×{term.count}
-                </span>
-              )}
-            </motion.div>
-          );
-          })}
+              {word.text}
+            </motion.span>
+          ))}
         </AnimatePresence>
-      </motion.div>
-      <div className="grid grid-cols-2 border-b-4 border-[var(--ink)] bg-[var(--paper-deep)] sm:grid-cols-3">
+      </div>
+      <div className="grid grid-cols-1 border-b-4 border-[var(--ink)] bg-[var(--paper-deep)] sm:grid-cols-3 [&>*]:px-4 [&>*]:py-3">
         <Stat label="chorus">{aggregate?.chorusShare ?? 0}%</Stat>
         <Stat label="phrase variety">{aggregate?.phraseVariety ?? 0}%</Stat>
         <Stat label="shared theme">{aggregate?.theme?.text ?? "still forming"}</Stat>
@@ -589,22 +641,23 @@ export function HotTakeStage({
   aggregate: Extract<ActivityAggregate, { type: "hot-take" }> | null;
 }) {
   const config = activity.config as Extract<Activity["config"], { type: "hot-take" }>;
+  const reduceMotion = useReducedMotion();
   const values = aggregate?.values ?? [];
   const sampled = values.filter((_, index) => values.length <= 120 || index % Math.ceil(values.length / 120) === 0);
   const x = scaleLinear().domain([-1000, 1000]).range([0, 100]);
   const marker = x(aggregate?.average ?? 0);
   return (
     <div>
-      <div className="mb-3 flex items-end justify-between gap-6">
-        <span className="max-w-[38%] text-2xl font-black text-[var(--red)] md:text-4xl">{config.leftLabel}</span>
-        <span className="mono-tag text-[var(--ink-soft)]">weighted room pull</span>
-        <span className="max-w-[38%] text-right text-2xl font-black text-[var(--blue)] md:text-4xl">{config.rightLabel}</span>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <span className="min-w-0 max-w-[38%] break-words text-lg font-black text-[var(--red)] sm:text-2xl md:text-4xl">{config.leftLabel}</span>
+        <span className="mono-tag shrink-0 text-[var(--ink-soft)]">weighted room pull</span>
+        <span className="min-w-0 max-w-[38%] break-words text-right text-lg font-black text-[var(--blue)] sm:text-2xl md:text-4xl">{config.rightLabel}</span>
       </div>
       <div className="relative h-48 overflow-hidden border-4 border-[var(--ink)] bg-[linear-gradient(90deg,var(--red)_0_49.5%,var(--paper)_49.5%_50.5%,var(--blue)_50.5%)] md:h-56">
         {sampled.map((value, index) => (
           <motion.span
             key={`${index}-${value}`}
-            initial={{ opacity: 0, scale: 0 }}
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
             animate={{ opacity: 0.65, scale: 1, left: `${x(value)}%` }}
             className="absolute h-3 w-3 -translate-x-1/2 rounded-full border border-[var(--ink)] bg-[var(--yellow)]"
             style={{ top: `${18 + (index % 6) * 12}%` }}

@@ -308,6 +308,11 @@ export interface Activity {
   type: ActivityType;
   prompt: string;
   state: ActivityState;
+  /**
+   * Bumps on host reset so in-flight votes and locally cached answers
+   * cannot leak across a cleared round that keeps the same activity id.
+   */
+  responseEpoch: number;
   config: ActivityConfig;
   deadlineAt: string | null;
   createdAt: string;

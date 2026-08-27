@@ -347,7 +347,7 @@ export function StagePage() {
             />
           </div>
 
-          <div className="stage-result relative mt-10">
+          <div className="stage-result relative mt-10 overflow-x-clip">
             {activity && (
               <StageWatermark
                 glyph={STAGE_GLYPHS[activity.config.type]}
@@ -378,19 +378,21 @@ export function StagePage() {
                     activity={activity}
                     aggregate={state.aggregate}
                   />
-                  {activity.state === "revealed" &&
-                    activity.config.resultsMode === "blind" && <RevealSweep />}
                 </motion.div>
               )}
             </AnimatePresence>
+            {activity.state === "revealed" &&
+              activity.config.resultsMode === "blind" && (
+                <RevealSweep key={`sweep-${activity.id}`} />
+              )}
           </div>
 
           {finalResultVisible && state.aggregate && (
             <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t-2 border-[var(--ink)] pt-4">
-              <p className="mono-tag text-[var(--ink-soft)]">
+              <p className="mono-tag min-w-0 text-[var(--ink-soft)]">
                 room receipt / {state.responseCount === 1 ? "1 voice" : `${state.responseCount} voices`} / {state.room.code}
               </p>
-              <div className="flex gap-2">
+              <div className="flex w-full gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => {
@@ -408,7 +410,7 @@ export function StagePage() {
                       ),
                     );
                   }}
-                  className="mono-tag block-shadow-sm border-2 border-[var(--ink)] bg-white px-3 py-2 transition-transform active:scale-95"
+                  className="mono-tag block-shadow-sm min-h-11 flex-1 border-2 border-[var(--ink)] bg-white px-3 py-2 transition-transform active:scale-95 sm:flex-none"
                 >
                   export png
                 </button>
@@ -424,7 +426,7 @@ export function StagePage() {
                       finishedAt: new Date().toISOString(),
                     })
                   }
-                  className="mono-tag block-shadow-sm border-2 border-[var(--ink)] bg-white px-3 py-2 transition-transform active:scale-95"
+                  className="mono-tag block-shadow-sm min-h-11 flex-1 border-2 border-[var(--ink)] bg-white px-3 py-2 transition-transform active:scale-95 sm:flex-none"
                 >
                   export csv
                 </button>
@@ -480,16 +482,16 @@ function BlindResultField({
       animate={{ opacity: 1, clipPath: "inset(0 0% 0 0%)" }}
       exit={{ opacity: 0, clipPath: "inset(0 50% 0 50%)" }}
       transition={{ duration: 0.36, ease: [0.2, 0.9, 0.2, 1] }}
-      className="relative grid min-h-72 place-items-center overflow-hidden border-y-4 border-[var(--ink)] bg-[var(--ink)] px-8 text-center text-[var(--paper)]"
+      className="relative grid min-h-56 place-items-center overflow-hidden border-y-4 border-[var(--ink)] bg-[var(--ink)] px-4 text-center text-[var(--paper)] sm:min-h-72 sm:px-8"
     >
       <div className="absolute inset-0 blind-stripes opacity-20" aria-hidden="true" />
-      <div className="relative">
+      <div className="relative min-w-0">
         <p className="mono-tag text-[var(--yellow)]">
           {phase === "locked" ? "the room is holding its breath" : "results sealed"}
         </p>
-        <p className="display mt-5 text-6xl md:text-8xl">
+        <p className="display mt-5 text-5xl sm:text-6xl md:text-8xl">
           {showCount ? responseCount : "SEALED"}
-          <span className="mt-2 block text-2xl md:text-3xl">answers under cover</span>
+          <span className="mt-2 block text-xl sm:text-2xl md:text-3xl">answers under cover</span>
         </p>
       </div>
     </motion.div>
@@ -498,7 +500,8 @@ function BlindResultField({
 
 function RevealSweep() {
   const shouldReduceMotion = useReducedMotion();
-  if (shouldReduceMotion) return null;
+  const [done, setDone] = useState(false);
+  if (shouldReduceMotion || done) return null;
 
   return (
     <motion.div
@@ -506,10 +509,11 @@ function RevealSweep() {
       animate={{ scaleX: 0 }}
       transition={{ duration: 0.72, ease: [0.76, 0, 0.24, 1], delay: 0.12 }}
       style={{ transformOrigin: "right" }}
-      className="pointer-events-none absolute inset-0 z-30 bg-[var(--yellow)]"
+      onAnimationComplete={() => setDone(true)}
+      className="rw-reveal-sweep pointer-events-none absolute inset-0 z-30 overflow-hidden bg-[var(--yellow)]"
       aria-hidden="true"
     >
-      <span className="display absolute left-10 top-1/2 -translate-y-1/2 text-7xl text-[var(--ink)]">
+      <span className="display absolute bottom-5 left-4 text-5xl text-[var(--ink)] sm:bottom-8 sm:left-10 sm:text-7xl">
         REVEAL
       </span>
     </motion.div>

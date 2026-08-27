@@ -30,6 +30,7 @@ import {
   loadPlaylist,
   makePlaylistEntry,
   savePlaylist,
+  subscribePlaylist,
   type PlaylistEntry,
 } from "../lib/playlist";
 import {
@@ -237,13 +238,13 @@ function ModePickButton({
     <button
       type="button"
       onClick={onPick}
-      className={`block-shadow-sm min-h-12 border-2 border-[var(--ink)] p-3 text-left transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none lg:p-4 ${selected ? "" : "opacity-60"}`}
+      className={`block-shadow-sm min-h-12 min-w-0 overflow-hidden border-2 border-[var(--ink)] p-3 text-left transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none lg:p-4 ${selected ? "" : "opacity-60"}`}
       style={{
         background: selected ? candidate.color : "var(--paper)",
         color: selected ? onSurface(candidate.color) : "var(--ink)",
       }}
     >
-      <p className="text-base font-black uppercase leading-tight lg:text-lg">{candidate.label}</p>
+      <p className="text-sm font-black uppercase leading-tight break-words sm:text-base lg:text-lg">{candidate.label}</p>
       <p className="mt-1 hidden text-xs opacity-90 sm:block">{candidate.tagline}</p>
     </button>
   );
@@ -257,7 +258,7 @@ function HostCounter({ value, kick }: { value: number; kick: number }) {
       initial={kick === 0 ? false : { scale: 1.2, color: "var(--red)" }}
       animate={{ scale: 1, color: "var(--ink)" }}
       transition={{ type: "spring", stiffness: 400, damping: 15 }}
-      className="display shrink-0 text-6xl tabular-nums"
+      className="display shrink-0 text-4xl tabular-nums sm:text-6xl"
     >
       {value}
     </motion.p>
@@ -309,6 +310,10 @@ export function HostPage() {
   const [playlist, setPlaylist] = useState<PlaylistEntry[]>(() =>
     roomId ? loadPlaylist(roomId) : [],
   );
+  useEffect(() => {
+    if (!roomId) return;
+    return subscribePlaylist(roomId, setPlaylist);
+  }, [roomId]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const roomCode = state?.room.code;
@@ -347,7 +352,11 @@ export function HostPage() {
         Number(chipsPerPerson) >= CHIP_STACK_BUDGET_MIN &&
         Number(chipsPerPerson) <= CHIP_STACK_BUDGET_MAX)) &&
     (mode !== "over-under" ||
-      (Boolean(unit.trim()) && Number.isFinite(Number(lineValue)))) &&
+      (Boolean(unit.trim()) &&
+        lineValue.trim() !== "" &&
+        Number.isFinite(Number(lineValue)) &&
+        numericAnswer !== null &&
+        Number.isFinite(numericAnswer))) &&
     (mode !== "rank-race" || cleanedOptions.length >= 3) &&
     (mode !== "future-fork" ||
       (cleanedOptions.length >= 2 && Boolean(evidenceDrop.trim()))) &&
@@ -421,19 +430,179 @@ export function HostPage() {
     };
   }, [moderationActivityId, roomId]);
 
-  function queueForLater() {
-    if (!roomId || !launchReady) return;
-    const entry = makePlaylistEntry(mode, prompt.trim(), {
-      mode,
-      prompt,
-      resultsMode,
-      options,
+  function composeLaunchPayload(): CreateActivityPayload | null {
+    if (!launchReady) return null;
+    const promptText = prompt.trim();
+    if (mode === "pulse-choice") {
+      return {
+        type: mode,
+        prompt: promptText,
+        options: cleanedOptions,
+        resultsMode,
+        choiceRule,
+      };
+    }
+    if (mode === "spectrum") {
+      return { type: mode, prompt: promptText, lowLabel, highLabel, resultsMode };
+    }
+    if (mode === "prediction") {
+      return {
+        type: mode,
+        prompt: promptText,
+        unit,
+        min: numericMin,
+        max: numericMax,
+        answer: numericAnswer,
+        resultsMode,
+      };
+    }
+    if (mode === "word-bloom") {
+      return {
+        type: mode,
+        prompt: promptText,
+        maxChars: Number(maxChars),
+        resultsMode,
+        moderationMode: reviewPublicText ? "review" : "live",
+      };
+    }
+    if (mode === "crowd-meter") {
+      return {
+        type: mode,
+        prompt: promptText,
+        windowSeconds: Number(windowSeconds),
+        resultsMode: "live",
+      };
+    }
+    if (mode === "rank-race") {
+      return {
+        type: mode,
+        prompt: promptText,
+        options: cleanedOptions,
+        resultsMode,
+      };
+    }
+    if (mode === "hot-take") {
+      return {
+        type: mode,
+        prompt: promptText,
+        leftLabel: lowLabel,
+        rightLabel: highLabel,
+        resultsMode,
+      };
+    }
+    if (mode === "quadrant-drop") {
+      return {
+        type: mode,
+        prompt: promptText,
+        xLowLabel,
+        xHighLabel,
+        yLowLabel,
+        yHighLabel,
+        resultsMode,
+      };
+    }
+    if (mode === "question-board") {
+      return {
+        type: mode,
+        prompt: promptText,
+        maxChars: Number(questionMaxChars),
+        resultsMode: "live",
+        moderationMode: reviewPublicText ? "review" : "live",
+      };
+    }
+    if (mode === "signal-noise") {
+      return {
+        type: mode,
+        prompt: promptText,
+        correctAnswer,
+        explanation,
+        timeLimitSeconds: Number(timeLimitSeconds),
+        resultsMode: "blind",
+      };
+    }
+    if (mode === "reality-bender") {
+      return {
+        type: mode,
+        prompt: promptText,
+        lowLabel,
+        highLabel,
+        resultsMode: "blind",
+      };
+    }
+    if (mode === "living-consensus") {
+      return {
+        type: mode,
+        prompt: promptText,
+        lowLabel,
+        highLabel,
+        resultsMode,
+      };
+    }
+    if (mode === "future-fork") {
+      return {
+        type: mode,
+        prompt: promptText,
+        branches: cleanedOptions,
+        evidenceDrop,
+        resultsMode: "blind",
+      };
+    }
+    if (mode === "cipher-room") {
+      return {
+        type: mode,
+        prompt: promptText,
+        ciphertext,
+        clue: cipherClue,
+        correctShift: numericCipherShift,
+        timeLimitSeconds: numericTimeLimit,
+        resultsMode: "blind",
+      };
+    }
+    if (mode === "shadow-council") {
+      return {
+        type: mode,
+        prompt: promptText,
+        aliases: cleanedOptions,
+        shadowAliasIndex: Number(shadowAliasIndex),
+        evidence: evidenceDrop,
+        timeLimitSeconds: numericTimeLimit,
+        resultsMode: "blind",
+      };
+    }
+    if (mode === "chip-stack") {
+      return {
+        type: mode,
+        prompt: promptText,
+        options: cleanedOptions,
+        chipsPerPerson: Number(chipsPerPerson),
+        resultsMode,
+      };
+    }
+    if (mode === "over-under") {
+      return {
+        type: mode,
+        prompt: promptText,
+        unit,
+        line: Number(lineValue),
+        actual: numericAnswer,
+        timeLimitSeconds: Number.isInteger(numericTimeLimit) ? numericTimeLimit : 0,
+        resultsMode,
+      };
+    }
+    return {
+      type: mode,
+      prompt: promptText,
       lowLabel,
       highLabel,
-      unit,
-      numericMin,
-      numericMax,
-    });
+      resultsMode,
+    };
+  }
+
+  function queueForLater() {
+    if (!roomId) return;
+    const payload = composeLaunchPayload();
+    if (!payload) return;
+    const entry = makePlaylistEntry(payload.type, payload.prompt, payload);
     const next = [...playlist, entry];
     setPlaylist(next);
     savePlaylist(roomId, next);
@@ -453,160 +622,16 @@ export function HostPage() {
       return;
     }
 
+    const payload = composeLaunchPayload();
+    if (!payload) {
+      setError("Finish the round setup before launching.");
+      return;
+    }
+
     setBusy(true);
     setError("");
 
     try {
-      let payload: CreateActivityPayload;
-      if (mode === "pulse-choice") {
-        payload = {
-          type: mode,
-          prompt,
-          options: options.map((o) => o.trim()).filter(Boolean),
-          resultsMode,
-          choiceRule,
-        };
-      } else if (mode === "spectrum") {
-        payload = { type: mode, prompt, lowLabel, highLabel, resultsMode };
-      } else if (mode === "prediction") {
-        payload = {
-          type: mode,
-          prompt,
-          unit,
-          min: numericMin,
-          max: numericMax,
-          answer: numericAnswer,
-          resultsMode,
-        };
-      } else if (mode === "word-bloom") {
-        payload = {
-          type: mode,
-          prompt,
-          maxChars: Number(maxChars),
-          resultsMode,
-          moderationMode: reviewPublicText ? "review" : "live",
-        };
-      } else if (mode === "crowd-meter") {
-        payload = {
-          type: mode,
-          prompt,
-          windowSeconds: Number(windowSeconds),
-          resultsMode: "live",
-        };
-      } else if (mode === "rank-race") {
-        payload = {
-          type: mode,
-          prompt,
-          options: options.map((option) => option.trim()).filter(Boolean),
-          resultsMode,
-        };
-      } else if (mode === "hot-take") {
-        payload = {
-          type: mode,
-          prompt,
-          leftLabel: lowLabel,
-          rightLabel: highLabel,
-          resultsMode,
-        };
-      } else if (mode === "quadrant-drop") {
-        payload = {
-          type: mode,
-          prompt,
-          xLowLabel,
-          xHighLabel,
-          yLowLabel,
-          yHighLabel,
-          resultsMode,
-        };
-      } else if (mode === "question-board") {
-        payload = {
-          type: mode,
-          prompt,
-          maxChars: Number(questionMaxChars),
-          resultsMode: "live",
-          moderationMode: reviewPublicText ? "review" : "live",
-        };
-      } else if (mode === "signal-noise") {
-        payload = {
-          type: mode,
-          prompt,
-          correctAnswer,
-          explanation,
-          timeLimitSeconds: Number(timeLimitSeconds),
-          resultsMode: "blind",
-        };
-      } else if (mode === "reality-bender") {
-        payload = {
-          type: mode,
-          prompt,
-          lowLabel,
-          highLabel,
-          resultsMode: "blind",
-        };
-      } else if (mode === "living-consensus") {
-        payload = {
-          type: mode,
-          prompt,
-          lowLabel,
-          highLabel,
-          resultsMode,
-        };
-      } else if (mode === "future-fork") {
-        payload = {
-          type: mode,
-          prompt,
-          branches: cleanedOptions,
-          evidenceDrop,
-          resultsMode: "blind",
-        };
-      } else if (mode === "cipher-room") {
-        payload = {
-          type: mode,
-          prompt,
-          ciphertext,
-          clue: cipherClue,
-          correctShift: numericCipherShift,
-          timeLimitSeconds: numericTimeLimit,
-          resultsMode: "blind",
-        };
-      } else if (mode === "shadow-council") {
-        payload = {
-          type: mode,
-          prompt,
-          aliases: cleanedOptions,
-          shadowAliasIndex: Number(shadowAliasIndex),
-          evidence: evidenceDrop,
-          timeLimitSeconds: numericTimeLimit,
-          resultsMode: "blind",
-        };
-      } else if (mode === "chip-stack") {
-        payload = {
-          type: mode,
-          prompt,
-          options: cleanedOptions,
-          chipsPerPerson: Number(chipsPerPerson),
-          resultsMode,
-        };
-      } else if (mode === "over-under") {
-        payload = {
-          type: mode,
-          prompt,
-          unit,
-          line: Number(lineValue),
-          actual: numericAnswer,
-          timeLimitSeconds: Number.isInteger(numericTimeLimit) ? numericTimeLimit : 0,
-          resultsMode,
-        };
-      } else {
-        payload = {
-          type: mode,
-          prompt,
-          lowLabel,
-          highLabel,
-          resultsMode,
-        };
-      }
-
       const activity = await createActivity(roomId!, hostToken, payload);
       await activityAction(activity.id, "start", hostToken);
       playRoomSound(state.room.settings.soundMode, "ready");
@@ -780,7 +805,7 @@ export function HostPage() {
   return (
     <main
       id="roomwave-main"
-      className="safe-page safe-gutters safe-top page-pad mx-auto min-h-dvh max-w-5xl"
+      className="safe-page safe-gutters safe-top page-pad mx-auto min-h-dvh max-w-5xl overflow-x-clip"
       data-room-theme={state.room.settings.theme}
     >
       {state.room.settings.allowReactions && <ReactionLayer burst={burst} />}
@@ -844,7 +869,7 @@ export function HostPage() {
             <img
               src={qr}
               alt="Join room QR code"
-              className="h-28 w-28 border-2 border-[var(--ink)] block-shadow-sm"
+              className="h-20 w-20 border-2 border-[var(--ink)] block-shadow-sm sm:h-28 sm:w-28"
             />
           )}
         </div>
@@ -965,7 +990,7 @@ export function HostPage() {
         <section className="mt-12">
           {playlist.length > 0 && (
             <div className="mb-8 border-2 border-[var(--ink)] bg-[var(--paper-deep)] p-4 block-shadow-sm">
-              <div className="flex items-baseline justify-between">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="mono-tag">run of show · {playlist.length} queued</p>
                 <a
                   href={`/host/${roomId}/remote`}
@@ -1007,12 +1032,12 @@ export function HostPage() {
                 setChoiceRule("majority");
                 setResultsMode("live");
               }}
-              className="mono-tag min-h-11 border-2 border-[var(--ink)] bg-[var(--yellow)] px-3 py-2"
+              className="mono-tag min-h-11 max-w-full border-2 border-[var(--ink)] bg-[var(--yellow)] px-3 py-2 leading-tight"
             >
               fill Go / Hold / Stuck
             </button>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
+          <div className="mt-4 grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
             {MODES.filter((candidate) => !GAME_TYPES.has(candidate.type)).map((candidate) => (
               <ModePickButton
                 key={candidate.type}
@@ -1038,7 +1063,7 @@ export function HostPage() {
             </div>
             <span className="mono-tag text-[var(--ink-soft)]">fair play / sealed truth</span>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
+          <div className="mt-4 grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
             {MODES.filter((candidate) => GAME_TYPES.has(candidate.type)).map((candidate) => (
               <ModePickButton
                 key={candidate.type}
@@ -1215,7 +1240,7 @@ export function HostPage() {
                   onChange={setTimeLimitSeconds}
                 />
                 <p className="mono-tag text-[var(--ink-soft)]">
-                  the room picks over or under. the actual stays sealed until you reveal.
+                  the room picks over or under. the actual stays sealed until you reveal, and is required so a push on the line can score honestly.
                 </p>
               </div>
             )}
@@ -1404,7 +1429,7 @@ export function HostPage() {
                 {(["live", "blind"] as const).map((candidate) => (
                   <label
                     key={candidate}
-                    className={`flex min-h-12 cursor-pointer items-center gap-3 border-2 border-[var(--ink)] px-4 py-3 font-bold ${
+                    className={`flex min-h-12 min-w-0 cursor-pointer items-center gap-3 border-2 border-[var(--ink)] px-3 py-3 text-sm font-bold leading-snug sm:px-4 sm:text-base ${
                       resultsMode === candidate
                         ? "bg-[var(--ink)] text-[var(--on-ink)]"
                         : "bg-[var(--paper)]"
@@ -1464,10 +1489,10 @@ export function HostPage() {
       ) : (
         /* ---------------- CONTROL ---------------- */
         <section className="mt-12">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <span
-                className="inline-block border-2 border-[var(--ink)] px-3 py-1
+                className="inline-block max-w-full border-2 border-[var(--ink)] px-3 py-1
                   text-sm font-black uppercase tracking-widest"
                 style={{
                   background:
@@ -1486,7 +1511,7 @@ export function HostPage() {
               >
                 {phase}
               </span>
-              <h2 className="mt-4 max-w-xl text-2xl font-black leading-snug md:text-3xl">
+              <h2 className="mt-4 max-w-xl break-words text-2xl font-black leading-snug md:text-3xl">
                 {activity.prompt}
               </h2>
               {activity.deadlineAt && (
@@ -1504,11 +1529,12 @@ export function HostPage() {
           </div>
 
           {/* Progressive disclosure: only the next valid actions show */}
-          <div className="mt-8 flex flex-wrap gap-4">
+          <div className="mt-8 grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:gap-4">
             {phase === "live" && (
               <BlockButton
                 color="var(--yellow)"
                 disabled={busy}
+                className="w-full sm:w-auto"
                 onClick={() => act("lock")}
               >
                 {lockActionLabel(activity.type)}
@@ -1518,6 +1544,7 @@ export function HostPage() {
               <BlockButton
                 color="var(--red)"
                 disabled={busy}
+                className="w-full sm:w-auto"
                 onClick={() => act("reveal")}
               >
                 {revealActionLabel(activity.type)}
@@ -1527,6 +1554,7 @@ export function HostPage() {
               <BlockButton
                 color="var(--paper-deep)"
                 disabled={busy}
+                className="w-full sm:w-auto"
                 onClick={() => act("reopen")}
               >
                 {reopenActionLabel(activity.type)}
@@ -1536,6 +1564,7 @@ export function HostPage() {
               <BlockButton
                 color="var(--paper-deep)"
                 disabled={busy}
+                className="w-full sm:w-auto"
                 onClick={() => {
                   if (window.confirm("Reset this round and erase every response?")) {
                     void act("reset");
@@ -1549,6 +1578,7 @@ export function HostPage() {
               <BlockButton
                 color="var(--ink)"
                 disabled={busy}
+                className="w-full sm:w-auto"
                 onClick={() => {
                   if (window.confirm("End this round and return the room to its lobby?")) {
                     void act("end");
@@ -1628,20 +1658,20 @@ export function HostPage() {
                     state.aggregate.questions.map((question, index) => (
                       <div
                         key={question.id}
-                        className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 border-2 border-[var(--ink)] p-3 ${
+                        className={`grid grid-cols-1 items-start gap-3 border-2 border-[var(--ink)] p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
                           question.answered ? "bg-[var(--paper-deep)] opacity-60" : "bg-white"
                         }`}
                       >
                         <span className="display text-2xl tabular-nums">{String(index + 1).padStart(2, "0")}</span>
-                        <div>
-                          <p className={question.answered ? "line-through" : "font-bold"}>{question.text}</p>
+                        <div className="min-w-0">
+                          <p className={`break-words ${question.answered ? "line-through" : "font-bold"}`}>{question.text}</p>
                           <p className="mono-tag mt-1 text-[var(--ink-soft)]">{question.votes} room votes</p>
                         </div>
                         <button
                           type="button"
                           disabled={busy}
                           onClick={() => void toggleQuestion(question.id, !question.answered)}
-                          className="mono-tag min-h-11 border-2 border-[var(--ink)] bg-[var(--yellow)] px-3"
+                          className="mono-tag min-h-11 w-full border-2 border-[var(--ink)] bg-[var(--yellow)] px-3 sm:w-auto"
                         >
                           {question.answered ? "restore" : "mark answered"}
                         </button>

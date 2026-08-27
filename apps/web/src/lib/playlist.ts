@@ -48,6 +48,19 @@ export function savePlaylist(roomId: string, entries: PlaylistEntry[]): void {
   }
 }
 
+export function subscribePlaylist(
+  roomId: string,
+  onChange: (entries: PlaylistEntry[]) => void,
+): () => void {
+  const key = `roomwave:playlist:${roomId}`;
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== key) return;
+    onChange(loadPlaylist(roomId));
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}
+
 export function makePlaylistEntry(
   type: ActivityType,
   prompt: string,

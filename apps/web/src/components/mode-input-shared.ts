@@ -19,13 +19,14 @@ export interface CommonModeInputProps {
 export function useModeSubmit(activity: Activity, token: string) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const epoch = activity.responseEpoch ?? 0;
 
   async function run(payload: unknown) {
     setPending(true);
     setError("");
     try {
       await submitResponse(activity.id, token, payload);
-      saveActivityAnswer(activity.id, payload);
+      saveActivityAnswer(activity.id, payload, epoch);
       playBoundSound("vote");
       return true;
     } catch (caught) {
@@ -37,7 +38,7 @@ export function useModeSubmit(activity: Activity, token: string) {
   }
 
   function restore<T>(): T | null {
-    return loadActivityAnswer(activity.id) as T | null;
+    return loadActivityAnswer(activity.id, epoch) as T | null;
   }
 
   return { pending, error, run, restore };

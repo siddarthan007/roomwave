@@ -194,7 +194,7 @@ export function ParticipantPage() {
           <div className="mx-auto mt-10 w-full max-w-md">
             {session ? (
               <ModeParticipantInput
-                key={activity.id}
+                key={`${activity.id}:${activity.responseEpoch ?? 0}`}
                 activity={activity}
                 token={session.token}
                 aggregate={state.aggregate}
@@ -227,12 +227,15 @@ export function ParticipantPage() {
             aggregate={state.aggregate}
             responseCount={state.responseCount}
             resultVisible={finalResultVisible}
+            showCount={
+              state.room.settings.showResponseCount || finalResultVisible
+            }
           />
           {finalResultVisible && (
             <button
               type="button"
               onClick={() => void shareRoom()}
-              className="block-shadow-sm mt-5 w-full border-2 border-[var(--ink)] bg-[var(--yellow)] px-5 py-4 text-lg font-black uppercase"
+              className="block-shadow-sm mt-5 w-full border-2 border-[var(--ink)] bg-[var(--yellow)] px-4 py-4 text-base font-black uppercase leading-tight text-balance sm:text-lg"
             >
               {shared ? "invite ready" : "bring someone into the next round"}
             </button>

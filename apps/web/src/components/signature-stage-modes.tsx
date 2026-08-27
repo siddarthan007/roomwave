@@ -172,7 +172,7 @@ export function LivingConsensusStage({
           <span>{config.lowLabel}</span><span>{config.highLabel}</span>
         </div>
       </div>
-      <div className="grid min-w-52 grid-cols-2 gap-4 lg:grid-cols-1">
+      <div className="grid min-w-0 w-full grid-cols-2 gap-4 lg:grid-cols-1">
         <Readout label="weighted position">{aggregate ? Math.round(aggregate.confidenceWeightedMean / 10) : 0}</Readout>
         <Readout label="coherence">{aggregate?.consensus ?? 0}%</Readout>
         <Readout label="confidence">{aggregate?.confidence ?? 0}%</Readout>

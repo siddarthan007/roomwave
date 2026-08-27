@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 
 import { useNavigate, useParams } from "react-router-dom";
 
-import { joinRoom } from "../lib/api";
+import { joinRoom, touchPresence } from "../lib/api";
 import {
+  clearParticipantSession,
   getJoinDraft,
   getParticipantSessionForCode,
   rememberJoinDraft,
@@ -79,16 +80,24 @@ export function JoinPage() {
     if (!nameTouched) setDisplayName(generatedRoomName(next));
   }
 
-  function continueExisting() {
+  async function continueExisting() {
     if (!code) return;
     const found = getParticipantSessionForCode(code);
-    if (found) navigate(`/room/${found.roomId}`);
+    if (!found) return;
+    try {
+      await touchPresence(found.roomId, found.session.token);
+      navigate(`/room/${found.roomId}`);
+    } catch {
+      clearParticipantSession(found.roomId, code);
+      setFreshTicket(true);
+      setError("That seat expired. Grab a new ticket.");
+    }
   }
 
   async function join() {
     if (!code) return;
     if (existing && !freshTicket) {
-      continueExisting();
+      await continueExisting();
       return;
     }
     setLoading(true);

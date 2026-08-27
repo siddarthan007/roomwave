@@ -12,7 +12,7 @@ import {
   type CreateActivityPayload,
 } from "../lib/api";
 import { getHostToken } from "../lib/storage";
-import { loadPlaylist, type PlaylistEntry } from "../lib/playlist";
+import { loadPlaylist, savePlaylist, subscribePlaylist, type PlaylistEntry } from "../lib/playlist";
 import { Kicker } from "../components/ui";
 import { useRoomStream } from "../hooks/use-room-stream";
 
@@ -31,6 +31,10 @@ export function PresenterPage() {
   const [playlist, setPlaylist] = useState<PlaylistEntry[]>(() =>
     roomId ? loadPlaylist(roomId) : [],
   );
+  useEffect(() => {
+    if (!roomId) return;
+    return subscribePlaylist(roomId, setPlaylist);
+  }, [roomId]);
   const hostToken = getHostToken(roomId ?? "");
 
   useEffect(() => {
@@ -61,7 +65,7 @@ export function PresenterPage() {
     !busy;
   const nextEntry = playlist[0];
 
-  async function act(action: "lock" | "reveal") {
+  async function act(action: "lock" | "reveal" | "end") {
     if (!activity || !hostToken || busy) return;
     setBusy(true);
     setError("");
@@ -80,11 +84,17 @@ export function PresenterPage() {
     setBusy(true);
     setError("");
     try {
+      let config: Record<string, unknown>;
+      try {
+        config = JSON.parse(nextEntry.configJson) as Record<string, unknown>;
+      } catch {
+        setError("This queued round is damaged. Remove it in the studio.");
+        return;
+      }
       // End the finished round first so the room accepts a new activity.
       if (activity && activity.state !== "ended") {
         await activityAction(activity.id, "end", hostToken);
       }
-      const config = JSON.parse(nextEntry.configJson) as Record<string, unknown>;
       const payload = {
         type: nextEntry.type,
         prompt: nextEntry.prompt,
@@ -94,32 +104,12 @@ export function PresenterPage() {
       await activityAction(created.id, "start", hostToken);
       const remaining = playlist.slice(1);
       setPlaylist(remaining);
-      try {
-        localStorage.setItem(
-          `roomwave:playlist:${roomId}`,
-          JSON.stringify(remaining),
-        );
-      } catch {
-        // ignore
-      }
+      savePlaylist(roomId, remaining);
       setState(await getRoomState(roomId));
     } catch (caught) {
-      // A queue entry built from an unfinished composer form can be
-      // rejected by the server; surface the field-level zod message and
-      // drop the broken entry so the show can go on.
       setError(
         caught instanceof Error ? caught.message : "Launch failed.",
       );
-      const remaining = playlist.filter((entry) => entry.id !== nextEntry.id);
-      setPlaylist(remaining);
-      try {
-        localStorage.setItem(
-          `roomwave:playlist:${roomId}`,
-          JSON.stringify(remaining),
-        );
-      } catch {
-        // storage unavailable
-      }
     } finally {
       setBusy(false);
     }
@@ -128,8 +118,13 @@ export function PresenterPage() {
   // Live counts ride the same SSE stream as every other surface; polling in
   // the effect above is only a fallback when this tab is backgrounded.
   useRoomStream(state?.room.id ?? "", (event) => {
-    if (event.type === "aggregate.updated" || event.type === "participant.count") {
-      // Cheap patch: refetch is fine at remote cadences (a few per minute).
+    if (
+      event.type === "aggregate.updated" ||
+      event.type === "participant.count" ||
+      event.type === "activity.state" ||
+      event.type === "activity.started" ||
+      event.type === "room.snapshot"
+    ) {
       if (roomId) void getRoomState(roomId).then(setState).catch(() => null);
     }
   }, Boolean(state));
@@ -209,9 +204,9 @@ export function PresenterPage() {
           type="button"
           onClick={() => void act("lock")}
           disabled={!canLock}
-          className="block-shadow flex min-h-28 items-center justify-center border-4 border-[var(--ink)]
-            bg-[var(--paper)] text-2xl font-black uppercase tracking-wide transition-transform
-            active:scale-95 disabled:opacity-35"
+          className="block-shadow flex min-h-24 items-center justify-center border-4 border-[var(--ink)]
+            bg-[var(--paper)] px-2 text-center text-xl font-black uppercase leading-tight tracking-wide transition-transform
+            active:scale-95 disabled:opacity-35 sm:min-h-28 sm:text-2xl"
         >
           lock
         </button>
@@ -220,13 +215,29 @@ export function PresenterPage() {
           onClick={() => void act("reveal")}
           disabled={!canReveal}
           whileTap={canReveal ? { scale: 0.96 } : undefined}
-          className="block-shadow flex min-h-28 items-center justify-center border-4 border-[var(--ink)]
-            bg-[var(--yellow)] text-2xl font-black uppercase tracking-wide
-            disabled:opacity-35"
+          className="block-shadow flex min-h-24 items-center justify-center border-4 border-[var(--ink)]
+            bg-[var(--yellow)] px-2 text-center text-xl font-black uppercase leading-tight tracking-wide
+            disabled:opacity-35 sm:min-h-28 sm:text-2xl"
         >
           reveal
         </motion.button>
       </div>
+
+      {activity && phase !== "ended" && phase !== "lobby" && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (window.confirm("End this round and return the room to its lobby?")) {
+              void act("end");
+            }
+          }}
+          className="block-shadow mt-4 flex min-h-14 w-full items-center justify-center border-4 border-[var(--ink)]
+            bg-[var(--paper-deep)] px-3 text-lg font-black uppercase tracking-wide disabled:opacity-35"
+        >
+          end round
+        </button>
+      )}
 
       <section className="mt-8">
         <div className="flex items-baseline justify-between">

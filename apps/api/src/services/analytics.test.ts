@@ -31,9 +31,10 @@ describe("normalizedEntropy", () => {
     expect(normalizedEntropy([10, 0, 0])).toBe(0);
   });
 
-  test("even spread -> 1", () => {
-    expect(normalizedEntropy([1, 1])).toBe(1);
-    expect(normalizedEntropy([5, 5, 5, 5])).toBeCloseTo(1);
+  test("even spread among occupied bins is full disagreement, empty bins ignored", () => {
+    expect(normalizedEntropy([1, 1, 0, 0])).toBe(1);
+    const alphabet = Array.from({ length: 26 }, (_, index) => (index < 2 ? 5 : 0));
+    expect(normalizedEntropy(alphabet)).toBe(1);
   });
 
   test("single option list -> 0", () => {

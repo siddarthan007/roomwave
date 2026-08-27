@@ -70,13 +70,13 @@ export function ChipStackInput({ activity, token }: CommonProps) {
   return (
     <div className="space-y-4">
       <div
-        className="flex items-end justify-between gap-3 border-2 border-[var(--ink)] bg-[var(--yellow)] px-4 py-3"
+        className="flex flex-wrap items-end justify-between gap-3 border-2 border-[var(--ink)] bg-[var(--yellow)] px-4 py-3"
         aria-live="polite"
         aria-label={`${remaining} of ${config.chipsPerPerson} chips left`}
       >
         <span className="mono-tag">chips left</span>
-        <span className="text-right">
-          <span className="display text-5xl tabular-nums">{remaining}</span>
+        <span className="min-w-0 text-right">
+          <span className="display text-4xl tabular-nums sm:text-5xl">{remaining}</span>
           <span className="mono-tag ml-2">of {config.chipsPerPerson}</span>
         </span>
       </div>
@@ -183,14 +183,16 @@ export function OverUnderInput({ activity, token }: CommonProps) {
                 setSide(candidate);
                 setSealed(false);
               }}
-              className="press-plate min-h-24 border-2 border-[var(--ink)] px-3 text-left block-shadow-sm"
+              className="press-plate min-h-24 min-w-0 overflow-hidden border-2 border-[var(--ink)] px-2.5 text-left block-shadow-sm sm:px-3"
               style={{
                 background: active ? color : "var(--paper)",
                 color: active ? onSurface(color) : "var(--ink)",
               }}
             >
-              <span className="mono-tag">{candidate === "over" ? "above the line" : "below the line"}</span>
-              <span className="display mt-2 block text-4xl">{candidate}</span>
+              <span className="mono-tag block leading-tight tracking-wide">
+                {candidate === "over" ? "above the line" : "below the line"}
+              </span>
+              <span className="display mt-2 block break-words text-3xl sm:text-4xl">{candidate}</span>
             </button>
           );
         })}
@@ -391,9 +393,9 @@ export function OverUnderStage({
           className="absolute inset-x-3 top-2 border-t-2 border-dashed border-[var(--ink)] opacity-40"
         />
         <p className="mono-tag">the published line</p>
-        <p className="display mt-2 text-6xl md:text-8xl">
+        <p className="display mt-2 break-words text-5xl sm:text-6xl md:text-8xl">
           {config.line}
-          <span className="ml-3 text-3xl md:text-4xl">{config.unit}</span>
+          <span className="ml-3 text-2xl sm:text-3xl md:text-4xl">{config.unit}</span>
         </p>
         {(!aggregate || aggregate.total === 0) && (
           <p className="mt-3 font-black">Waiting for the first call.</p>
@@ -428,7 +430,11 @@ export function OverUnderStage({
             <span className="ml-3 text-3xl">{config.unit}</span>
           </p>
           <p className="mt-3 text-xl font-black">
-            {aggregate?.overWins ? "Over the line." : "Under the line."}
+            {aggregate?.overWins === null
+              ? "Push. The number sat on the line."
+              : aggregate.overWins
+                ? "Over the line."
+                : "Under the line."}
             {aggregate?.accuracy != null ? ` Room accuracy ${aggregate.accuracy}%.` : ""}
           </p>
         </div>

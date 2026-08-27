@@ -2,6 +2,7 @@ import type {
   ActivityAggregate,
   ActivityType,
 } from "@roomwave/shared";
+import { apportionPercents } from "@roomwave/shared";
 
 // ---------------------------------------------------------------------------
 // Round receipts: one human-readable summary + CSV export per round.
@@ -36,7 +37,7 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
     case "pulse-choice": {
       const rows: ReceiptRow[] = aggregate.options.map((option) => ({
         label: option.label,
-        value: `${option.count} · ${Math.round(option.percentage)}%`,
+        value: `${option.count} · ${option.percentage}%`,
       }));
       rows.push({ label: "consensus", value: pct(aggregate.consensus) });
       if (aggregate.winnerOptionIds.length > 0) {
@@ -106,7 +107,7 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
     }
     case "hot-take": {
       const side =
-        aggregate.average > 50 ? "right" : aggregate.average < -50 ? "left" : "split";
+        aggregate.average > 100 ? "right" : aggregate.average < -100 ? "left" : "split";
       return [
         { label: "average pull", value: num(Math.abs(aggregate.average / 10), 0) },
         { label: "leaning", value: side },
@@ -181,7 +182,7 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
         { label: "room expected", value: num(aggregate.expectedMean / 10, 0) },
         {
           label: "perception gap",
-          value: `${aggregate.perceptionGap > 0 ? "+" : ""}${num(aggregate.perceptionGap / 10, 0)}`,
+          value: `${aggregate.perceptionGap > 0 ? "+" : ""}${num(aggregate.perceptionGap, 0)}`,
         },
         { label: "misread share", value: pct(aggregate.misreadShare) },
         { label: "projection correlation", value: aggregate.projectionCorrelation === null ? "n/a" : num(aggregate.projectionCorrelation, 2) },
@@ -250,7 +251,7 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
     case "chip-stack": {
       const rows: ReceiptRow[] = aggregate.options.map((option) => ({
         label: option.label,
-        value: `${option.chips} chips · ${Math.round(option.share)}%`,
+        value: `${option.chips} chips · ${option.share}%`,
       }));
       rows.push({ label: "spend focus", value: pct(aggregate.concentration) });
       if (aggregate.leaderIds.length > 0) {
@@ -270,15 +271,24 @@ export function receiptRows(aggregate: ActivityAggregate): ReceiptRow[] {
       ];
       if (aggregate.actual !== null) {
         rows.push({ label: "actual", value: num(aggregate.actual) });
-        rows.push({ label: "side that hit", value: aggregate.overWins ? "over" : "under" });
+        rows.push({
+          label: "side that hit",
+          value:
+            aggregate.overWins === null
+              ? "push at the line"
+              : aggregate.overWins
+                ? "over"
+                : "under",
+        });
         rows.push({ label: "room accuracy", value: pct(aggregate.accuracy) });
       }
       return rows;
     }
     case "fist-five": {
+      const shares = apportionPercents(aggregate.counts);
       const rows: ReceiptRow[] = aggregate.counts.map((count, level) => ({
         label: `${level}`,
-        value: `${count} · ${aggregate.total === 0 ? 0 : Math.round((count / aggregate.total) * 100)}%`,
+        value: `${count} · ${shares[level] ?? 0}%`,
       }));
       rows.push({ label: "median hand", value: num(aggregate.median) });
       rows.push({ label: "mean hand", value: num(aggregate.mean) });

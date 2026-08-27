@@ -24,9 +24,12 @@ export function FillBar({
 
   return (
     <div
+      data-fill-share={String(Math.round(amount * 10000) / 100)}
+      data-fill-axis="x"
       className={`relative overflow-hidden ${framed ? "border-2 border-[var(--ink)] bg-[var(--paper-deep)]" : ""} ${className}`}
     >
       <motion.div
+        data-fill-paint=""
         aria-hidden="true"
         initial={false}
         animate={{ scaleX: amount }}
@@ -58,9 +61,12 @@ export function FillColumn({
 
   return (
     <div
+      data-fill-share={String(Math.round(amount * 10000) / 100)}
+      data-fill-axis="y"
       className={`relative overflow-hidden bg-[var(--paper-deep)] ${className}`}
     >
       <motion.div
+        data-fill-paint=""
         aria-hidden="true"
         initial={false}
         animate={{ scaleY: amount }}

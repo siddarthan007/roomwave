@@ -17,11 +17,11 @@ export function Headline({
 }) {
   const sizes = {
     sm: "text-2xl md:text-3xl",
-    md: "text-4xl md:text-5xl",
-    lg: "text-6xl md:text-7xl",
-    xl: "text-7xl md:text-9xl",
+    md: "text-3xl sm:text-4xl md:text-5xl",
+    lg: "text-5xl sm:text-6xl md:text-7xl",
+    xl: "text-5xl sm:text-7xl md:text-9xl",
   } as const;
-  return <h1 className={`display ${sizes[size]}`}>{children}</h1>;
+  return <h1 className={`display break-words ${sizes[size]}`}>{children}</h1>;
 }
 
 /** Small condensed kicker label, print-style. */
@@ -48,6 +48,7 @@ export function BlockButton({
   disabled = false,
   wide = false,
   textColor,
+  className = "",
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -56,6 +57,7 @@ export function BlockButton({
   disabled?: boolean;
   wide?: boolean;
   textColor?: string;
+  className?: string;
 }) {
   const reduce = useReducedMotion();
   return (
@@ -65,9 +67,10 @@ export function BlockButton({
       disabled={disabled}
       whileTap={disabled || reduce ? undefined : { x: 3, y: 3, boxShadow: "0px 0px 0px var(--ink)" }}
       transition={{ type: "spring", stiffness: 700, damping: 32 }}
-      className={`relative isolate border-2 border-[var(--ink)] px-6 py-3 text-lg
-        font-bold uppercase tracking-wide block-shadow-sm
-        disabled:cursor-not-allowed ${wide ? "w-full" : ""}`}
+      className={`relative isolate max-w-full border-2 border-[var(--ink)] px-4 py-3 text-base
+        font-bold uppercase leading-tight tracking-wide text-balance block-shadow-sm
+        sm:px-6 sm:text-lg
+        disabled:cursor-not-allowed ${wide ? "w-full" : ""} ${className}`}
       style={{
         background: color,
         color: textColor ?? onSurface(color),
@@ -83,7 +86,7 @@ export function BlockButton({
           }}
         />
       )}
-      <span className="relative">{children}</span>
+      <span className="relative block">{children}</span>
     </motion.button>
   );
 }

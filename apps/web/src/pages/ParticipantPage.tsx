@@ -137,7 +137,7 @@ export function ParticipantPage() {
   return (
     <main
       id="roomwave-main"
-      className={`safe-page safe-gutters safe-top relative min-h-dvh overflow-hidden pt-6 ${state.room.settings.allowReactions ? "has-reaction-dock" : "pb-8"}`}
+      className={`safe-page safe-gutters safe-top relative min-h-dvh overflow-x-clip pt-6 ${state.room.settings.allowReactions ? "has-reaction-dock" : "pb-8"}`}
       data-room-theme={state.room.settings.theme}
     >
       <ReactionLayer burst={burst} localBurst={localBurst} />

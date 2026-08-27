@@ -631,6 +631,8 @@ export type RoomEvent =
       type: "response.created";
       roomId: string;
       activityId: string;
+      /** Row count after this write. Omitted for question-board (votes are not voices). */
+      responseCount?: number;
     }
   | {
       type: "aggregate.updated";

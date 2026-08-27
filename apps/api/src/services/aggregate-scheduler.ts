@@ -2,35 +2,49 @@
 // Dirty-activity scheduler: coalesces burst votes into one aggregate
 // computation + broadcast per bounded interval, instead of per vote.
 // Canonical state is always the database; this only paces broadcasts.
+// Quiet rooms flush on a 40ms leading edge so the projector moves with
+// the first tap; a burst still folds into the 350ms window.
 // ---------------------------------------------------------------------------
 
 import { roomHub } from "../realtime/room-hub";
 import { getRoomState } from "./room-state";
 
 const COALESCE_MS = 350;
+const LEADING_MS = 40;
 const PULSE_REFRESH_MS = 1_000;
 
 interface PendingActivity {
-  timer: ReturnType<typeof setTimeout> | null;
+  roomId: string;
+  more: boolean;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 export class AggregateScheduler {
   private pending = new Map<string, PendingActivity>();
 
-  markDirty(activityId: string, roomId: string, delay = COALESCE_MS) {
-    let entry = this.pending.get(activityId);
-    if (!entry) {
-      entry = { timer: null };
-      this.pending.set(activityId, entry);
+  markDirty(activityId: string, roomId: string, delay = LEADING_MS) {
+    const existing = this.pending.get(activityId);
+    if (existing) {
+      existing.more = true;
+      return;
     }
 
-    if (entry.timer) return; // already scheduled
+    const entry: PendingActivity = {
+      roomId,
+      more: false,
+      timer: setTimeout(() => this.tick(activityId), delay),
+    };
+    entry.timer.unref?.();
+    this.pending.set(activityId, entry);
+  }
 
-    entry.timer = setTimeout(() => {
-      entry!.timer = null;
-      this.pending.delete(activityId);
-      this.flush(activityId, roomId);
-    }, delay);
+  private tick(activityId: string) {
+    const entry = this.pending.get(activityId);
+    if (!entry) return;
+    const { roomId, more } = entry;
+    this.pending.delete(activityId);
+    if (more) this.markDirty(activityId, roomId, COALESCE_MS);
+    this.flush(activityId, roomId);
   }
 
   private flush(activityId: string, roomId: string) {

@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { useState } from "react";
 
 import { AnimatedStat } from "./AnimatedStat";
+import { FillBar, FillColumn } from "./FillBar";
 import { ErrorNote } from "./ui";
 import { onSurface } from "./surface-color";
 import {
@@ -295,16 +296,11 @@ export function ChipStackStage({
                   className="display text-3xl"
                 />
               </div>
-              <div
-                className="mt-3 h-5 overflow-hidden border-2 border-[var(--ink)] bg-[var(--paper-deep)]"
-                aria-hidden="true"
-              >
-                <motion.div
-                  initial={false}
-                  animate={{ width: `${row.share}%` }}
-                  transition={{ type: "spring", stiffness: 260, damping: 28 }}
-                  className="h-full"
-                  style={{ background: CHIP_COLORS[row.index % CHIP_COLORS.length] }}
+              <div className="mt-3">
+                <FillBar
+                  share={row.share}
+                  color={CHIP_COLORS[row.index % CHIP_COLORS.length]}
+                  className="h-5 fill-hatch"
                 />
               </div>
               <div className="mt-4 flex h-28 items-end justify-center gap-1" aria-hidden="true">
@@ -333,13 +329,7 @@ export function ChipStackStage({
       {aggregate?.concentration != null && (
         <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[auto_1fr_auto] sm:gap-4">
           <span className="mono-tag text-[var(--ink-soft)]">spend focus</span>
-          <div className="h-3 border-2 border-[var(--ink)] bg-[var(--paper-deep)]">
-            <motion.div
-              initial={false}
-              animate={{ width: `${aggregate.concentration}%` }}
-              className="h-full bg-[var(--ink)]"
-            />
-          </div>
+          <FillBar share={aggregate.concentration} color="var(--ink)" className="h-3" />
           <AnimatedStat value={aggregate.concentration} className="display text-3xl" />
         </div>
       )}
@@ -396,14 +386,7 @@ export function OverUnderStage({
           <p className="mono-tag mt-3">{aggregate?.underCount ?? 0} calls</p>
         </div>
       </div>
-      <div className="h-6 overflow-hidden border-2 border-[var(--ink)] bg-[var(--paper-deep)]">
-        <motion.div
-          initial={false}
-          animate={{ width: `${overShare}%` }}
-          transition={{ type: "spring", stiffness: 260, damping: 28 }}
-          className="h-full bg-[var(--green)]"
-        />
-      </div>
+      <FillBar share={overShare} color="var(--green)" className="h-6 fill-hatch" />
       {revealed && actual != null && (
         <div className="border-2 border-[var(--ink)] bg-[var(--yellow)] p-5 block-shadow-sm">
           <p className="mono-tag">the number landed</p>
@@ -454,19 +437,19 @@ export function FistFiveStage({
               className="flex min-w-0 flex-col border-2 border-[var(--ink)] bg-white p-2 sm:p-3"
               style={{ outline: isMedian ? "3px solid var(--yellow)" : undefined }}
             >
-              <div className="relative h-36 overflow-hidden bg-[var(--paper-deep)] sm:h-48">
-                <motion.div
-                  initial={false}
-                  animate={{ height: `${share}%` }}
-                  transition={{ type: "spring", stiffness: 220, damping: 26 }}
-                  className="absolute inset-x-0 bottom-0 border-t-2 border-[var(--ink)]"
-                  style={{ background: isMedian ? "var(--yellow)" : "var(--green)" }}
+              <div className="relative">
+                <FillColumn
+                  share={share}
+                  color={isMedian ? "var(--yellow)" : "var(--green)"}
+                  className="h-36 sm:h-48"
                 />
-                <div className="absolute inset-x-0 bottom-0 flex flex-col-reverse items-center gap-1 p-1">
+                <div
+                  className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col-reverse items-center gap-1 p-1"
+                  aria-hidden="true"
+                >
                   {Array.from({ length: Math.min(count, 8) }, (_, index) => (
                     <span
                       key={index}
-                      aria-hidden="true"
                       className="h-3 w-5 border-2 border-[var(--ink)] bg-[var(--paper)] sm:h-4 sm:w-6"
                     />
                   ))}

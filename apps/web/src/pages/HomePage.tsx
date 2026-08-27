@@ -52,7 +52,7 @@ export function HomePage() {
   }
 
   return (
-    <main id="roomwave-main" className="relative min-h-dvh overflow-hidden">
+    <main id="roomwave-main" className="relative min-h-dvh overflow-x-clip">
       <div aria-hidden="true" className="halftone absolute inset-0" />
       <div aria-hidden="true" className="paper-grain" />
 
@@ -69,7 +69,7 @@ export function HomePage() {
           </h1>
 
           <p className="mt-6 max-w-xl text-[clamp(1.05rem,2.8vw,1.35rem)] leading-relaxed text-[var(--ink-soft)]">
-            Live audience energy for classrooms, clubs, and stages.
+            Live audience energy for classrooms, club nights, town halls, and surveys.
             Scan, tap, and watch the room move. No accounts, no setup.
           </p>
         </header>
@@ -158,7 +158,11 @@ export function HomePage() {
         )}
 
         <footer className="mt-14 border-t-4 border-[var(--ink)] pt-5 sm:mt-20">
-          <p className="mono-tag text-[var(--ink-soft)]">what the room can play</p>
+          <p className="mono-tag text-[var(--ink-soft)]">built for the room in front of you</p>
+          <p className="mt-3 max-w-xl text-sm font-black uppercase leading-relaxed tracking-wide text-[var(--ink)]">
+            Lecture check-ins, festival polls, public Q&A, opinion lines. One code on the wall, phones out.
+          </p>
+          <p className="mono-tag mt-6 text-[var(--ink-soft)]">what the projector plays</p>
           <p className="mt-3 max-w-xl text-sm font-black uppercase leading-relaxed tracking-wide text-[var(--ink)]">
             Pulse, spectrum, fist five, chip stack, over / under, plus the sealed games.
           </p>

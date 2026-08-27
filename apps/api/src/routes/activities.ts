@@ -40,7 +40,7 @@ import {
   validateResponseFor,
 } from "../services/modes";
 import { canReset, canTransition } from "../services/activity-state";
-import { getRoomState } from "../services/room-state";
+import { getRoomState, countStoredResponses } from "../services/room-state";
 import {
   cancelActivityDeadline,
   deadlineFor,
@@ -812,6 +812,9 @@ activityRoutes.post("/:activityId/responses", async (c) => {
     type: "response.created",
     roomId: writableActivity.roomId,
     activityId,
+    ...(writableActivity.type === "question-board"
+      ? {}
+      : { responseCount: countStoredResponses(activityId) }),
   });
 
   // Canonical aggregate follows on a coalesced schedule.

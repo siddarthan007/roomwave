@@ -16,6 +16,7 @@ import {
   ShadowCouncilStage,
 } from "./signature-stage-modes";
 import { ChipStackStage, FistFiveStage, OverUnderStage } from "./arcade-modes";
+import { FillBar } from "./FillBar";
 import { onSurface } from "./surface-color";
 
 const OPTION_COLORS = [
@@ -85,6 +86,8 @@ export function PulseChoiceStage({
       {rows.map((row) => {
         const color = OPTION_COLORS[row.index % OPTION_COLORS.length];
         const isLead = Boolean(emphasized && emphasized.id === row.id && aggregate && aggregate.total > 0);
+        const share = (row.count / max) * 100;
+        const countOnFill = share >= 22;
         return (
         <div key={row.id}>
           <div className="mb-1 flex items-baseline justify-between gap-4">
@@ -99,27 +102,27 @@ export function PulseChoiceStage({
           </div>
 
           <div
-            className={`relative border-2 border-[var(--ink)] bg-[var(--paper-deep)] segment-rail ${isLead ? "h-12 md:h-14 block-shadow-sm" : "h-9 md:h-12"}`}
+            className={`relative ${isLead ? "h-12 md:h-14" : "h-9 md:h-12"} ${emphasized && emphasized.id !== row.id ? "opacity-60" : ""}`}
           >
-            <motion.div
-              initial={false}
-              animate={{ width: `${(row.count / max) * 100}%` }}
-              transition={respectMotion({ type: "spring", stiffness: 120, damping: 20 })}
-              className="absolute inset-y-0 left-0 flex items-center justify-end border-r-2 border-[var(--ink)] pr-2"
-              style={{
-                background: color,
-                opacity: emphasized && emphasized.id !== row.id ? 0.55 : 1,
-              }}
-            >
-              {row.count > 0 && (
-                <span
-                  className="text-sm font-black tabular-nums md:text-base"
-                  style={{ color: onSurface(color) }}
-                >
-                  {row.count}
-                </span>
-              )}
-            </motion.div>
+            <FillBar
+              share={share}
+              color={color}
+              className={`h-full fill-hatch ${isLead ? "block-shadow-sm" : ""}`}
+            />
+            {row.count > 0 && (
+              <span
+                className="pointer-events-none absolute top-1/2 text-sm font-black tabular-nums md:text-base"
+                style={{
+                  left: `${share}%`,
+                  transform: countOnFill
+                    ? "translate(-110%, -50%)"
+                    : "translate(8px, -50%)",
+                  color: countOnFill ? onSurface(color) : "var(--ink)",
+                }}
+              >
+                {row.count}
+              </span>
+            )}
           </div>
         </div>
         );
@@ -141,13 +144,7 @@ export function PulseChoiceStage({
       {aggregate?.consensus != null && (
         <div className="grid grid-cols-1 items-center gap-2 pt-2 sm:grid-cols-[auto_1fr_auto] sm:gap-4">
           <span className="mono-tag text-[var(--ink-soft)]">room agreement</span>
-          <div className="h-2 border border-[var(--ink)] bg-[var(--paper-deep)]">
-            <motion.div
-              initial={false}
-              animate={{ width: `${aggregate.consensus}%` }}
-              className="h-full bg-[var(--ink)]"
-            />
-          </div>
+          <FillBar share={aggregate.consensus} color="var(--ink)" className="h-2" />
           <AnimatedStat
             value={aggregate.consensus}
             className="display text-3xl"
@@ -342,15 +339,11 @@ export function CrowdMeterStage({
   return (
     <div>
       <div className="relative h-52 overflow-hidden border-4 border-[var(--ink)] bg-white md:h-64">
-        <motion.div
-          initial={false}
-          animate={{ width: `${pressure}%` }}
-          transition={
-            shouldReduceMotion
-              ? { duration: 0 }
-              : { type: "spring", stiffness: 110, damping: 18 }
-          }
-          className="absolute inset-y-0 left-0 border-r-4 border-[var(--ink)] bg-[var(--green)]"
+        <FillBar
+          share={pressure}
+          color="var(--green)"
+          framed={false}
+          className="absolute inset-0 h-full"
         />
         <div className="absolute inset-0 flex items-center justify-center gap-3 overflow-hidden px-6">
           {Array.from({ length: strikes }, (_, index) => (
@@ -557,14 +550,11 @@ export function RankRaceStage({
                 <span className="text-xl font-black md:text-3xl">{option.label}</span>
                 <span className="mono-tag">{option.firstPlaceShare}% first-place</span>
               </div>
-              <div className="relative h-10 overflow-hidden border-2 border-[var(--ink)] bg-[var(--paper-deep)]">
-                <motion.div
-                  layout
-                  initial={false}
-                  animate={{ width: `${option.score}%` }}
-                  transition={{ type: "spring", stiffness: 120, damping: 20 }}
-                  className="absolute inset-y-0 left-0 border-r-2 border-[var(--ink)]"
-                  style={{ background: OPTION_COLORS[index % OPTION_COLORS.length] }}
+              <div className="relative h-10">
+                <FillBar
+                  share={option.score}
+                  color={OPTION_COLORS[index % OPTION_COLORS.length]}
+                  className="h-full fill-hatch"
                 />
                 <motion.span
                   animate={{ left: `clamp(18px, ${option.score}%, calc(100% - 18px))` }}

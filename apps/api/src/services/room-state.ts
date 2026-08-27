@@ -31,6 +31,16 @@ function emptyMomentum(): RoomMomentum {
   };
 }
 
+export function countStoredResponses(activityId: string): number {
+  return (
+    db
+      .select({ value: count() })
+      .from(responses)
+      .where(eq(responses.activityId, activityId))
+      .get()?.value ?? 0
+  );
+}
+
 export function calculateMomentum(
   updatedAt: string[],
   now = Date.now(),
@@ -195,12 +205,7 @@ export function getRoomState(
     };
   }
 
-  const storedResponseCount =
-    db
-      .select({ value: count() })
-      .from(responses)
-      .where(eq(responses.activityId, activity.id))
-      .get()?.value ?? 0;
+  const storedResponseCount = countStoredResponses(activity.id);
   const canonicalAggregate = aggregateActivity(activity);
   // Question votes are engagement signals, not additional respondents.
   const responseCount =

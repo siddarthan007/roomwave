@@ -77,6 +77,14 @@ export function useRoom(roomId: string) {
 
         case "response.created":
           setArrival((tick) => tick + 1);
+          if (typeof event.responseCount === "number") {
+            const nextCount = event.responseCount;
+            setState((current) =>
+              current && current.activity?.id === event.activityId
+                ? { ...current, responseCount: nextCount }
+                : current,
+            );
+          }
           break;
 
         case "activity.started":

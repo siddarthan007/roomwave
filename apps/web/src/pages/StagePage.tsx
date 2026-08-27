@@ -1,4 +1,4 @@
-import type { ActivityState, ReactionBurst } from "@roomwave/shared";
+import type { ActivityState, ActivityType, ReactionBurst } from "@roomwave/shared";
 import { activityHasFinalResult, timedRoundSeconds } from "@roomwave/shared";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -17,6 +17,7 @@ import { PixelAvatar } from "../components/PixelAvatar";
 import { ReactionStamp } from "../components/ReactionStamp";
 import { RoundClock } from "../components/RoundClock";
 import { SoundToggle } from "../components/SoundToggle";
+import { FillBar } from "../components/FillBar";
 import { playRoomSound } from "../lib/sound";
 import { downloadReceiptCsv, receiptRows } from "../lib/receipt";
 import { downloadReceiptPng } from "../lib/receipt-png";
@@ -34,12 +35,16 @@ const PHASE_COPY: Record<ActivityState, string> = {
 };
 
 /** Oversized counter that kicks on every arriving response. */
-function ArrivalCounter({ value }: { value: number }) {
+function ArrivalCounter({ value, kick }: { value: number; kick: number }) {
   const shouldReduceMotion = useReducedMotion();
   return (
     <motion.p
-      key={value}
-      initial={shouldReduceMotion ? false : { scale: 1.18, color: "var(--red)" }}
+      key={kick}
+      initial={
+        shouldReduceMotion || kick === 0
+          ? false
+          : { scale: 1.18, color: "var(--red)" }
+      }
       animate={{ scale: 1, color: "var(--ink)" }}
       transition={{ type: "spring", stiffness: 400, damping: 15 }}
       className="stage-arrival display mt-1 text-5xl tabular-nums md:text-7xl"
@@ -98,13 +103,23 @@ function ReactionHeat({
   );
 }
 
-const STAGE_GLYPHS: Record<string, string> = {
+const STAGE_GLYPHS: Record<ActivityType, string> = {
   "pulse-choice": "%",
   spectrum: "|",
-  "word-bloom": '"',
   prediction: "^",
+  "word-bloom": '"',
+  "crowd-meter": "*",
+  "rank-race": ">",
   "hot-take": "_",
+  "quadrant-drop": "+",
+  "question-board": "?",
+  "before-after": "{",
   "signal-noise": "~",
+  "reality-bender": "!",
+  "living-consensus": "@",
+  "future-fork": "Y",
+  "cipher-room": "&",
+  "shadow-council": "X",
   "chip-stack": "#",
   "over-under": "/",
   "fist-five": "5",
@@ -124,7 +139,7 @@ function StageWatermark({ glyph }: { glyph: string }) {
 
 export function StagePage() {
   const { roomId } = useParams();
-  const { state, burst, connection, error } = useRoom(roomId ?? "");
+  const { state, burst, arrival, connection, error } = useRoom(roomId ?? "");
   const [qr, setQr] = useState("");
   const [receiptError, setReceiptError] = useState("");
   const lastPhase = useRef<string | null>(null);
@@ -179,7 +194,7 @@ export function StagePage() {
   return (
     <main
       id="roomwave-main"
-      className="safe-page relative min-h-dvh overflow-hidden"
+      className="stage-shell relative min-h-dvh"
       data-room-theme={state.room.settings.theme}
     >
       <div aria-hidden="true" className="halftone absolute inset-0" />
@@ -232,7 +247,7 @@ export function StagePage() {
                 {finalResultVisible ? "FINAL" : PHASE_COPY[activity.state]}
               </motion.span>
               {showLiveCount && (
-                <ArrivalCounter value={state.responseCount} />
+                <ArrivalCounter value={state.responseCount} kick={arrival} />
               )}
               <p className="stage-status-meta mono-tag text-[var(--ink-soft)]">
                 {state.onlineCount} online / {state.participantCount} joined / {state.momentum.trend}
@@ -250,7 +265,7 @@ export function StagePage() {
 
       {!activity ? (
         /* Lobby join call. */
-        <section className="relative z-10 mx-auto grid min-h-[70vh] max-w-5xl place-items-center px-4 text-center sm:px-8">
+        <section className="stage-lobby relative z-10 mx-auto grid min-h-[70vh] max-w-5xl place-items-center px-4 text-center sm:px-8">
           <div>
             <motion.p
               animate={shouldReduceMotion ? { opacity: 1 } : { opacity: [1, 0.35, 1] }}
@@ -302,7 +317,7 @@ export function StagePage() {
           </div>
         </section>
       ) : (
-        <section className="stage-content relative z-10 mx-auto max-w-6xl px-4 pb-24 sm:px-8 md:px-12">
+        <section className="stage-content relative z-10 mx-auto max-w-6xl px-4 sm:px-8 md:px-12">
           <motion.h1
             key={activity.id}
             initial={{ opacity: 0, y: 30 }}
@@ -335,7 +350,7 @@ export function StagePage() {
           <div className="stage-result relative mt-10">
             {activity && (
               <StageWatermark
-                glyph={STAGE_GLYPHS[activity.config.type] ?? "+"}
+                glyph={STAGE_GLYPHS[activity.config.type]}
               />
             )}
             <AnimatePresence mode="wait" initial={false}>
@@ -357,7 +372,7 @@ export function StagePage() {
                   className="rw-receipt-card rw-reveal-stamp relative"
                 >
                   <p data-receipt-meta className="mono-tag mb-4 text-[var(--ink-soft)]">
-                    {state.room.code} · {activity.type} · {state.responseCount} voices
+                    {state.room.code} · {activity.type} · {state.responseCount === 1 ? "1 voice" : `${state.responseCount} voices`}
                   </p>
                   <ModeStagePresentation
                     activity={activity}
@@ -373,7 +388,7 @@ export function StagePage() {
           {finalResultVisible && state.aggregate && (
             <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t-2 border-[var(--ink)] pt-4">
               <p className="mono-tag text-[var(--ink-soft)]">
-                room receipt / {state.responseCount} voices / {state.room.code}
+                room receipt / {state.responseCount === 1 ? "1 voice" : `${state.responseCount} voices`} / {state.room.code}
               </p>
               <div className="flex gap-2">
                 <button
@@ -442,13 +457,7 @@ function MomentumRail({
   return (
     <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[auto_1fr_auto] sm:gap-4">
       <span className="mono-tag text-[var(--ink-soft)]">momentum / {trend}</span>
-      <div className="h-3 overflow-hidden border-2 border-[var(--ink)] bg-white">
-        <motion.div
-          initial={false}
-          animate={{ width: `${width}%` }}
-          className="h-full bg-[var(--red)]"
-        />
-      </div>
+      <FillBar share={width} color="var(--red)" className="h-3 fill-hatch" />
       <span className="mono-tag tabular-nums">
         {showCount ? `${responseCount} landed` : "count under cover"}
       </span>

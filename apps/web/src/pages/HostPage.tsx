@@ -244,11 +244,11 @@ function ModePickButton({
 }
 
 /** Host-side counter with the same arrival kick as the stage. */
-function HostCounter({ value }: { value: number }) {
+function HostCounter({ value, kick }: { value: number; kick: number }) {
   return (
     <motion.p
-      key={value}
-      initial={value === 0 ? false : { scale: 1.2, color: "var(--red)" }}
+      key={kick}
+      initial={kick === 0 ? false : { scale: 1.2, color: "var(--red)" }}
       animate={{ scale: 1, color: "var(--ink)" }}
       transition={{ type: "spring", stiffness: 400, damping: 15 }}
       className="display shrink-0 text-6xl tabular-nums"
@@ -260,8 +260,8 @@ function HostCounter({ value }: { value: number }) {
 
 export function HostPage() {
   const { roomId } = useParams();
-  const { state, setState, burst, error: roomError } = useRoom(roomId ?? "");
-  const arrival = state?.responseCount ?? 0;
+  const { state, setState, burst, arrival, error: roomError } = useRoom(roomId ?? "");
+  const voices = state?.responseCount ?? 0;
 
   const [mode, setMode] = useState<DraftType>("pulse-choice");
   const [prompt, setPrompt] = useState("");
@@ -1485,7 +1485,7 @@ export function HostPage() {
                 </div>
               )}
             </div>
-            <HostCounter value={arrival} />
+            <HostCounter value={voices} kick={arrival} />
           </div>
 
           {/* Progressive disclosure: only the next valid actions show */}

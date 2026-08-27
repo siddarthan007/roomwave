@@ -38,7 +38,7 @@ export function FillBar({
         className="absolute inset-y-0 left-0 w-full origin-left"
         style={{ background: color, willChange: "transform" }}
       />
-      {children ? <div className="relative z-10">{children}</div> : null}
+      {children ? <div className="relative z-10 h-full">{children}</div> : null}
     </div>
   );
 }

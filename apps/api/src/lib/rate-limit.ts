@@ -89,9 +89,3 @@ export const hostCommandLimiter = new RateLimiter(120, 60_000);
 /** One room may fill a hall, but must not grow listeners without a ceiling. */
 export const MAX_EVENT_SUBSCRIBERS_PER_ROOM = 500;
 export const MAX_EVENT_SUBSCRIBERS_GLOBAL = 2_000;
-
-/**
- * Room expiration: lobby/live rooms older than this are closed and their
- * codes freed on a lazy sweep at join time.
- */
-export const ROOM_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours

@@ -311,7 +311,7 @@ roomRoutes.post(
     if (
       !joinableRoom ||
       joinableRoom.status === "ended" ||
-      isRoomExpired(joinableRoom.createdAt)
+      isRoomExpired(joinableRoom)
     ) {
       if (joinableRoom && joinableRoom.status !== "ended") {
         endExpiredRoom(joinableRoom.id);
@@ -499,7 +499,7 @@ roomRoutes.post("/:roomId/presence", async (c) => {
     );
   }
   const room = db.select().from(rooms).where(eq(rooms.id, roomId)).get();
-  if (!room || room.status === "ended") {
+  if (!room || room.status === "ended" || isRoomExpired(room)) {
     return c.json(
       { error: { code: "ROOM_ENDED", message: "This room has ended." } },
       409,
@@ -678,7 +678,7 @@ roomRoutes.post(
     if (
       !currentRoom ||
       currentRoom.status === "ended" ||
-      isRoomExpired(currentRoom.createdAt)
+      isRoomExpired(currentRoom)
     ) {
       return c.json(
         {

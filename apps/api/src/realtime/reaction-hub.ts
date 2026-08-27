@@ -66,6 +66,16 @@ export class ReactionHub {
       });
     }
   }
+
+  /** Cancel pending bursts so a deleted room cannot republish. */
+  forget(roomId: string) {
+    const buckets = this.rooms.get(roomId);
+    if (!buckets) return;
+    for (const bucket of buckets) {
+      if (bucket.timer) clearTimeout(bucket.timer);
+    }
+    this.rooms.delete(roomId);
+  }
 }
 
 export const reactionHub = new ReactionHub();

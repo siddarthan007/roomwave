@@ -185,3 +185,11 @@ sqlite.transaction(() => {
 })();
 
 export const db = database;
+
+/** Shared Bun SQLite handle for pragmas and correlated lifecycle queries. */
+export { sqlite };
+
+/** Checkpoint the SQLite write-ahead log without waiting on readers. */
+export function checkpointWal(): void {
+  sqlite.exec("PRAGMA wal_checkpoint(PASSIVE)");
+}

@@ -89,6 +89,11 @@ A complete pre-tracking Roomwave schema may be repaired to the documented legacy
 baseline and marked there without losing data. A partial core schema fails closed
 and requires restore from a valid backup.
 
+Rooms with no durable create, join, round, or response for 24 hours are
+hard-deleted on a coalesced sweep. In-memory presence, reactions, listeners,
+deadlines, and event sequences for those rooms are dropped, and SQLite runs a
+PASSIVE WAL checkpoint after a successful purge.
+
 ---
 
 ## 4. Realtime Rule

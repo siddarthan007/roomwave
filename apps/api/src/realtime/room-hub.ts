@@ -90,6 +90,11 @@ class RoomHub {
     for (const listeners of this.rooms.values()) total += listeners.size;
     return total;
   }
+
+  /** Drop live listeners for a room that no longer exists. */
+  drop(roomId: string) {
+    this.rooms.delete(roomId);
+  }
 }
 
 export const roomHub =

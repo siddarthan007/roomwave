@@ -108,6 +108,13 @@ class PresenceHub {
       if (before !== (this.rooms.get(roomId)?.size ?? 0)) this.publish(roomId, now);
     }
   }
+
+  /** Drop in-memory presence for a room that has been deleted. */
+  forget(roomId: string) {
+    this.cancelScheduled(roomId);
+    this.rooms.delete(roomId);
+    this.visibility.delete(roomId);
+  }
 }
 
 export const presenceHub = new PresenceHub();

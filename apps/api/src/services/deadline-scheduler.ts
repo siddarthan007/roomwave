@@ -29,6 +29,15 @@ export function cancelActivityDeadline(activityId: string) {
   timers.delete(activityId);
 }
 
+export function cancelDeadlinesForRoom(roomId: string) {
+  const rows = db
+    .select({ id: activities.id })
+    .from(activities)
+    .where(eq(activities.roomId, roomId))
+    .all();
+  for (const row of rows) cancelActivityDeadline(row.id);
+}
+
 export function scheduleActivityDeadline(
   activityId: string,
   roomId: string,

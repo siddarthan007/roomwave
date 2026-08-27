@@ -27,6 +27,7 @@ from a phone, and visibly change a shared projector surface.
 - host moderation for public text, with review-before-stage enabled by default
 - bounded lexical themes for Word Bloom using native tokenization, without profiling
 - mobile-safe gesture fallbacks, responsive stage graphics, and route-level code splitting
+- rooms idle for 24 hours (no create, join, round, or response) are deleted and codes return to the pool
 
 ## Run locally
 
@@ -70,7 +71,7 @@ and aggregation test, not an HTTP latency or browser FPS claim.
 
 Roomwave currently targets one API process backed by SQLite WAL and an in-memory
 event hub. The API applies trusted-peer rate limits, request-size limits,
-connection ceilings, append-only round quotas, expiry checks, and lifecycle
+connection ceilings, append-only round quotas, 24-hour idle room deletion, and lifecycle
 compare-and-swap guards. Joined count means durable anonymous room sessions; it
 does not claim that every participant is currently online.
 

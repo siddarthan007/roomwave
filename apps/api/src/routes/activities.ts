@@ -91,6 +91,7 @@ export function findWritableResponseActivity(
   ) return null;
   const room = db
     .select({
+      id: rooms.id,
       status: rooms.status,
       activeActivityId: rooms.activeActivityId,
       createdAt: rooms.createdAt,
@@ -103,7 +104,7 @@ export function findWritableResponseActivity(
     !room ||
     room.status !== "live" ||
     room.activeActivityId !== activityId ||
-    isRoomExpired(room.createdAt)
+    isRoomExpired(room)
   ) return null;
   return activity;
 }
@@ -276,6 +277,7 @@ async function hostActivityAction(c: AppContext) {
 
   const authoritativeRoom = db
     .select({
+      id: rooms.id,
       status: rooms.status,
       activeActivityId: rooms.activeActivityId,
       createdAt: rooms.createdAt,
@@ -287,7 +289,7 @@ async function hostActivityAction(c: AppContext) {
   if (
     !authoritativeRoom ||
     authoritativeRoom.status === "ended" ||
-    isRoomExpired(authoritativeRoom.createdAt)
+    isRoomExpired(authoritativeRoom)
   ) {
     if (authoritativeRoom?.status !== "ended") endExpiredRoom(activity.roomId);
     return c.json(
@@ -572,6 +574,7 @@ activityRoutes.post("/:activityId/responses", async (c) => {
 
   const responseRoom = db
     .select({
+      id: rooms.id,
       status: rooms.status,
       activeActivityId: rooms.activeActivityId,
       createdAt: rooms.createdAt,
@@ -583,7 +586,7 @@ activityRoutes.post("/:activityId/responses", async (c) => {
   if (
     !responseRoom ||
     responseRoom.status === "ended" ||
-    isRoomExpired(responseRoom.createdAt)
+    isRoomExpired(responseRoom)
   ) {
     return c.json(
       {
@@ -883,7 +886,7 @@ activityRoutes.post("/reactions", async (c) => {
     );
   }
 
-  if (room.status === "ended" || isRoomExpired(room.createdAt)) {
+  if (room.status === "ended" || isRoomExpired(room)) {
     return c.json(
       {
         error: { code: "ROOM_ENDED", message: "This room has ended." },
@@ -911,14 +914,19 @@ activityRoutes.post("/reactions", async (c) => {
   }
 
   const currentRoom = db
-    .select({ status: rooms.status, createdAt: rooms.createdAt, settings: rooms.settings })
+    .select({
+      id: rooms.id,
+      status: rooms.status,
+      createdAt: rooms.createdAt,
+      settings: rooms.settings,
+    })
     .from(rooms)
     .where(eq(rooms.id, roomId))
     .get();
   if (
     !currentRoom ||
     currentRoom.status === "ended" ||
-    isRoomExpired(currentRoom.createdAt)
+    isRoomExpired(currentRoom)
   ) {
     return c.json(
       {

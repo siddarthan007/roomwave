@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 
 import type { Activity, RoomState } from "@roomwave/shared";
 
 import { app } from "../index";
 import { findWritableResponseActivity } from "./activities";
 import { db } from "../db";
-import { activities, responses, rooms } from "../db/schema";
+import { activities, participants, responses, rooms } from "../db/schema";
 
 let cleanupRoomId = "";
 
@@ -308,10 +308,31 @@ describe("release hardening", () => {
     );
     expect(state.responseCount).toBe(0);
 
+    const stale = new Date(Date.now() - 25 * 60 * 60 * 1_000).toISOString();
     db.update(rooms)
-      .set({ createdAt: new Date(Date.now() - 13 * 60 * 60 * 1_000).toISOString() })
+      .set({ createdAt: stale })
       .where(eq(rooms.id, created.room.id))
       .run();
+    db.update(activities)
+      .set({ createdAt: stale })
+      .where(eq(activities.roomId, created.room.id))
+      .run();
+    db.update(participants)
+      .set({ joinedAt: stale })
+      .where(eq(participants.roomId, created.room.id))
+      .run();
+    const staleActivityIds = db
+      .select({ id: activities.id })
+      .from(activities)
+      .where(eq(activities.roomId, created.room.id))
+      .all()
+      .map(({ id }) => id);
+    if (staleActivityIds.length > 0) {
+      db.update(responses)
+        .set({ createdAt: stale, updatedAt: stale })
+        .where(inArray(responses.activityId, staleActivityIds))
+        .run();
+    }
     const expiredReset = await app.request(
       `/api/activities/${board.id}/reset`,
       { method: "POST", headers: hostHeaders },

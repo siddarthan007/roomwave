@@ -113,10 +113,12 @@ export function PulseChoiceStage({
               <span
                 className="pointer-events-none absolute top-1/2 text-sm font-black tabular-nums md:text-base"
                 style={{
-                  left: `${share}%`,
+                  left: countOnFill
+                    ? `max(1.75rem, calc(${share}% - 1rem))`
+                    : `${share}%`,
                   transform: countOnFill
-                    ? "translate(-110%, -50%)"
-                    : "translate(8px, -50%)",
+                    ? "translate(-100%, -50%)"
+                    : "translate(12px, -50%)",
                   color: countOnFill ? onSurface(color) : "var(--ink)",
                 }}
               >

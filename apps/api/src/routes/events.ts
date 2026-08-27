@@ -1,7 +1,8 @@
 import type { RoomEvent } from "@roomwave/shared";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 
-import type { AppEnv } from "../lib/app-env";
+import type { AppContext, AppEnv } from "../lib/app-env";
 import { remoteClientKey } from "../lib/app-env";
 import {
   eventStreamLimiter,
@@ -10,6 +11,7 @@ import {
 } from "../lib/rate-limit";
 import { expireStaleRooms } from "../lib/room-expiry";
 import { roomHub } from "../realtime/room-hub";
+import { encodeSse } from "../realtime/sse-encode";
 import { assignSequence, eventsAfter } from "../realtime/event-sequence";
 import { getRoomState } from "../services/room-state";
 
@@ -17,20 +19,17 @@ export const eventRoutes = new Hono<AppEnv>();
 
 /** A silently-dead TCP peer holds a subscriber slot forever without this. */
 const MAX_CONNECTION_MS = 30 * 60_000; // 30 minutes, then the client reconnects.
+/** Evict a client that is not draining rather than buffer unbounded. */
+const MAX_PENDING_FRAMES = 24;
 
-function encodeSse(
-  encoder: TextEncoder,
-  event: string,
-  data: unknown,
-  options: { id?: string; retry?: number } = {},
-): Uint8Array {
-  const fields = [
-    `event: ${event}`,
-    `data: ${JSON.stringify(data)}`,
-    options.id ? `id: ${options.id}` : null,
-    options.retry ? `retry: ${options.retry}` : null,
-  ].filter(Boolean);
-  return encoder.encode(`${fields.join("\n")}\n\n`);
+function keepSseAlive(c: AppContext) {
+  // Bun.serve closes quiet streams after 10s unless this request's idle
+  // timer is disabled. Tests and non-Bun adapters have no server handle.
+  try {
+    c.env?.bunServer?.timeout(c.req.raw, 0);
+  } catch {
+    // Ignore missing timeout support.
+  }
 }
 
 eventRoutes.get("/:roomId/events", (c) => {
@@ -67,119 +66,100 @@ eventRoutes.get("/:roomId/events", (c) => {
     c.req.header("Last-Event-ID") ?? c.req.query("after") ?? "";
   const resumeAfter = Number.parseInt(resumeRaw, 10);
 
-  const encoder = new TextEncoder();
-  let cleanup = () => {};
-  const body = new ReadableStream<Uint8Array>(
-    {
-      start(controller) {
-        let active = true;
-        let heartbeat: ReturnType<typeof setInterval>;
-        let lifetime: ReturnType<typeof setTimeout>;
-        let unsubscribe = () => {};
-
-        const close = () => {
-          if (!active) return;
-          active = false;
-          unsubscribe();
-          clearInterval(heartbeat);
-          clearTimeout(lifetime);
-          c.req.raw.signal.removeEventListener("abort", close);
-          try {
-            controller.close();
-          } catch {
-            // The consumer may already have cancelled the stream.
-          }
-        };
-        const write = (
-          event: RoomEvent,
-          seq: number,
-          extra: { retry?: number } = {},
-        ): boolean => {
-          // desiredSize falls below zero when a client is not draining. Give
-          // a short burst budget, then evict instead of buffering unbounded.
-          if (controller.desiredSize != null && controller.desiredSize <= -16) {
-            return false;
-          }
-          try {
-            controller.enqueue(
-              encodeSse(encoder, event.type, event, {
-                id: String(seq),
-                retry: extra.retry,
-              }),
-            );
-            return true;
-          } catch {
-            return false;
-          }
-        };
-
-        unsubscribe = roomHub.subscribe(roomId, (event, seq) => {
-          if (!active) return;
-          if (!write(event, seq)) close();
-        });
-        heartbeat = setInterval(() => {
-          if (!active) return;
-          if (controller.desiredSize != null && controller.desiredSize <= -16) {
-            close();
-            return;
-          }
-          try {
-            controller.enqueue(encodeSse(encoder, "heartbeat", {}));
-          } catch {
-            close();
-          }
-        }, 5_000);
-        // Zombie eviction: heartbeats can keep "succeeding" into a dead OS
-        // buffer indefinitely, so cap every connection's lifetime and let the
-        // client's auto-reconnect (with its last event id) take over.
-        lifetime = setTimeout(close, MAX_CONNECTION_MS);
-        lifetime.unref?.();
-        c.req.raw.signal.addEventListener("abort", close, { once: true });
-        cleanup = close;
-
-        // Snapshot is computed AFTER subscribing: any mutation that lands
-        // between subscribe and this read arrives as both a duplicate event
-        // and inside the snapshot — safe — whereas the reverse order loses it.
-        const freshState = getRoomState(roomId);
-        if (!freshState) {
-          const snapshotSeq = assignSequence(roomId, {
-            type: "room.snapshot",
-            state: exists,
-          });
-          if (!write({ type: "room.snapshot", state: exists }, snapshotSeq)) {
-            close();
-          }
-          return;
-        }
-        const snapshotEvent = { type: "room.snapshot" as const, state: freshState };
-        const snapshotSeq = assignSequence(roomId, snapshotEvent);
-        if (!write(snapshotEvent, snapshotSeq, { retry: 2_000 })) {
-          close();
-          return;
-        }
-        // Replay anything missed while disconnected — best-effort deltas on
-        // top of the authoritative snapshot; skipped when the gap predates
-        // the replay window.
-        if (Number.isFinite(resumeAfter) && resumeAfter > 0) {
-          for (const { seq, event } of eventsAfter(roomId, resumeAfter)) {
-            if (!active) break;
-            if (!write(event, seq)) {
-              close();
-              break;
-            }
-          }
-        }
-      },
-      cancel() {
-        cleanup();
-      },
-    },
-    { highWaterMark: 16 },
-  );
-
-  c.header("Cache-Control", "no-cache, no-transform");
-  c.header("Connection", "keep-alive");
-  c.header("Content-Type", "text/event-stream; charset=UTF-8");
+  keepSseAlive(c);
+  c.header("Cache-Control", "no-cache, no-store, no-transform");
   c.header("X-Accel-Buffering", "no");
-  return c.body(body);
+  c.header("Content-Encoding", "identity");
+
+  return streamSSE(c, async (stream) => {
+    let active = true;
+    let unsubscribe = () => {};
+    let writeChain = Promise.resolve();
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let lifetime: ReturnType<typeof setTimeout> | undefined;
+
+    let pendingFrames = 0;
+
+    const close = () => {
+      if (!active) return;
+      active = false;
+      unsubscribe();
+      if (heartbeat) clearInterval(heartbeat);
+      if (lifetime) clearTimeout(lifetime);
+    };
+
+    const enqueue = (bytes: Uint8Array) => {
+      if (!active) return writeChain;
+      if (pendingFrames >= MAX_PENDING_FRAMES) {
+        close();
+        return writeChain;
+      }
+      pendingFrames += 1;
+      writeChain = writeChain
+        .then(async () => {
+          pendingFrames = Math.max(0, pendingFrames - 1);
+          if (!active || stream.closed) return;
+          await stream.write(bytes);
+        })
+        .catch(close);
+      return writeChain;
+    };
+
+    const writeEvent = (
+      event: RoomEvent,
+      seq: number,
+      extra: { retry?: number } = {},
+    ) =>
+      enqueue(
+        encodeSse(event.type, event, {
+          id: String(seq),
+          retry: extra.retry,
+        }),
+      );
+
+    unsubscribe = roomHub.subscribe(roomId, (_event, _seq, encoded) => {
+      void enqueue(encoded);
+    });
+
+    heartbeat = setInterval(() => {
+      void enqueue(encodeSse("heartbeat", {}));
+    }, 5_000);
+    heartbeat.unref?.();
+
+    stream.onAbort(close);
+    c.req.raw.signal.addEventListener("abort", close, { once: true });
+
+    // Snapshot is computed AFTER subscribing: any mutation that lands
+    // between subscribe and this read arrives as both a duplicate event
+    // and inside the snapshot — safe — whereas the reverse order loses it.
+    const freshState = getRoomState(roomId);
+    const snapshotEvent = {
+      type: "room.snapshot" as const,
+      state: freshState ?? exists,
+    };
+    const snapshotSeq = assignSequence(roomId, snapshotEvent);
+    await writeEvent(snapshotEvent, snapshotSeq, { retry: 2_000 });
+
+    if (Number.isFinite(resumeAfter) && resumeAfter > 0) {
+      for (const { seq, event } of eventsAfter(roomId, resumeAfter)) {
+        if (!active) break;
+        await writeEvent(event, seq);
+      }
+    }
+
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        close();
+        resolve();
+      };
+      if (!active) {
+        resolve();
+        return;
+      }
+      stream.onAbort(finish);
+      c.req.raw.signal.addEventListener("abort", finish, { once: true });
+      lifetime = setTimeout(finish, MAX_CONNECTION_MS);
+      lifetime.unref?.();
+    });
+  });
 });

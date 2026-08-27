@@ -41,9 +41,13 @@ Minimal Caddy configuration:
 ```caddyfile
 room.example.com {
   encode zstd gzip
-  reverse_proxy 127.0.0.1:3000
+  reverse_proxy 127.0.0.1:3000 {
+    flush_interval -1
+  }
 }
 ```
+
+`flush_interval -1` sends each SSE chunk as it is written. Without it, Caddy may hold live votes and reactions until a buffer fills or the tab refreshes.
 
 Check readiness:
 
@@ -91,6 +95,126 @@ VITE_API_URL=https://api.room.example.com
 ```
 
 The included `_redirects` file preserves `/host`, `/join`, `/room`, and `/stage` deep links. Add the Pages origin to `ROOMWAVE_ALLOWED_ORIGINS` on the API.
+
+## Cloudflare dashboard (domain cache and live streams)
+
+Roomwave's live stage is an SSE stream at `/api/rooms/:id/events` plus short HTTP commands. If Cloudflare caches or buffers those paths, votes and reactions only appear after a refresh. Use these dashboard settings whether Cloudflare sits in front of a VPS or only serves Pages.
+
+### DNS
+
+| Record | Proxy status | Why |
+| --- | --- | --- |
+| Apex / `www` / Pages custom domain | Proxied (orange cloud) | CDN for the static app |
+| `api` (VPS origin) | DNS only (grey cloud) **or** Proxied with the cache rules below | Grey cloud is the safest SSE path. Orange cloud is fine if `/api` is set to Bypass |
+
+If the web app and API share one hostname, keep it Proxied and rely on the Cache Rules.
+
+### SSL/TLS
+
+- Overview: **Full (strict)**
+- Edge Certificates: **Always Use HTTPS** on
+- Minimum TLS Version: **1.2**
+- Automatic HTTPS Rewrites: on
+
+### Caching → Configuration (zone defaults)
+
+- Caching Level: **Standard**
+- Browser Cache TTL: **Respect Existing Headers**
+- Crawler Hints: optional
+- Always Online: off for a live event product (stale HTML is worse than a brief outage)
+
+Do not enable **Cache Everything** on the zone. That setting will cache HTML shells and can intercept `/api`.
+
+### Caching → Cache Rules
+
+Create two rules, in this order. Newer Cloudflare UI: **Rules → Cache Rules**.
+
+**1. Bypass the API and event stream (first, most specific)**
+
+- When incoming requests match:
+  - **URI Path** starts with `/api/`
+  - or **Hostname** equals `api.yourdomain.com` (if the API is a subdomain)
+- Then:
+  - Cache eligibility: **Bypass cache**
+  - Origin cache control: **Respect origin**
+  - Place at the **top** of the list
+
+**2. Cache hashed static assets**
+
+- When: **URI Path** starts with `/assets/` or `/emoji/` or `/fonts/`
+- Then:
+  - Cache eligibility: **Eligible for cache**
+  - Edge TTL: **1 year** (or "Ignore cache-control header" with a 1-year override)
+  - Browser TTL: **Respect origin** (the app already sends `immutable` on hashed files)
+  - Origin cache control: **Respect origin**
+
+Optional third rule for the SPA shell:
+
+- When: **URI Path** equals `/` or **URI Full** matches `/(host|join|room|stage|presenter)/.*`
+- Then: **Bypass cache** (Pages `_headers` already uses `max-age=0, must-revalidate` for `index.html`)
+
+### Rules → Configuration Rules (API hostname or `/api/*`)
+
+Disable features that rewrite or delay responses:
+
+- Rocket Loader: **off**
+- Auto Minify (HTML, CSS, JS): **off**
+- Email Address Obfuscation: **off**
+- Browser Integrity Check: keep on for HTML; if the API hostname is separate, you can leave it on
+- Mirage / Polish: **off** on the API hostname
+
+Rocket Loader in particular breaks `EventSource`.
+
+### Speed → Optimization
+
+For the zone that fronts the API:
+
+- Auto Minify: all off
+- Rocket Loader: off
+- Early Hints: optional for the static site, not required for `/api`
+
+### Network
+
+- HTTP/2: on
+- HTTP/3 (QUIC): on is fine for the static site; if SSE stalls only on HTTP/3, create a Configuration Rule to disable HTTP/3 for `/api/*`
+- WebSockets: on (unused today; harmless)
+- gRPC: off
+- Pseudo IPv4: off
+- 0-RTT: off for the API hostname (replay risk on POST)
+
+### Security
+
+- Security Level: **Medium**
+- Bot Fight Mode: avoid on the API hostname if participants join from school/conference NATs and get challenged mid-vote
+- WAF custom rule (optional): skip Browser Integrity / challenge for `URI Path` starts with `/api/rooms/` and `URI Path` contains `/events`
+
+### Pages project (if the frontend is on Pages)
+
+Build:
+
+```text
+Build command: bun run build:web
+Output directory: apps/web/dist
+```
+
+Environment variables:
+
+```env
+VITE_PUBLIC_URL=https://your.pages.dev
+VITE_API_URL=https://api.yourdomain.com
+```
+
+Pages Caching: leave default. `_headers` in `apps/web/public/_headers` already marks `/assets` immutable and `/api` as `no-store`. Those `/api` lines only apply if Pages is asked to serve `/api`; the VPS still must send `Cache-Control: no-store` on the event stream (the API already does).
+
+### Quick verification
+
+After saving rules, in a live room:
+
+1. DevTools → Network → the `events` request stays **pending** (not 200 with a finished body).
+2. Response headers include `content-type: text/event-stream` and `cf-cache-status: DYNAMIC` or `BYPASS`, never `HIT`.
+3. A vote on a phone moves the projector **without** switching tabs.
+
+If `events` shows `cf-cache-status: HIT` or the transfer size jumps only after you leave the tab, the Bypass rule is not matching. Check hostname vs path, and that no older Page Rule with Cache Everything sits above it. **Page Rules are deprecated**; migrate them to Cache Rules and delete the Cache Everything rule.
 
 ## Why Socket.IO is not installed
 

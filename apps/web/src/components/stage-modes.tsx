@@ -18,6 +18,7 @@ import {
 } from "./signature-stage-modes";
 import { ChipStackStage, FistFiveStage, OverUnderStage } from "./arcade-modes";
 import { FillBar } from "./FillBar";
+import { QuadrantPlotFrame } from "./quadrant-axes";
 import { onSurface } from "./surface-color";
 import {
   bloomAnchors,
@@ -698,33 +699,31 @@ export function QuadrantDropStage({
   const y = scaleLinear().domain([0, 1000]).range([595, 55]);
   return (
     <div>
-      <div className="relative border-4 border-[var(--ink)] bg-white">
-        <svg viewBox="0 0 1000 650" role="img" aria-label={`${aggregate?.total ?? 0} responses placed on ${config.xLowLabel} to ${config.xHighLabel} and ${config.yLowLabel} to ${config.yHighLabel}`} className="block w-full">
-          <line x1="500" x2="500" y1="30" y2="620" stroke="var(--ink)" strokeWidth="4" />
-          <line x1="30" x2="970" y1="325" y2="325" stroke="var(--ink)" strokeWidth="4" />
-          {sampled.map((point, index) => (
-            <motion.circle
-              key={point.id}
-              initial={{ r: 0, opacity: 0 }}
-              animate={{ cx: x(point.x), cy: y(point.y), r: 10, opacity: 0.72 }}
-              transition={{ delay: Math.min(index * 0.006, 0.25), type: "spring", stiffness: 220, damping: 19 }}
-              fill={OPTION_COLORS[index % OPTION_COLORS.length]}
-              stroke="var(--ink)"
-              strokeWidth="3"
-            />
-          ))}
-          {aggregate?.centroid && (
-            <motion.g animate={{ x: x(aggregate.centroid.x), y: y(aggregate.centroid.y) }}>
-              <circle r="24" fill="var(--yellow)" stroke="var(--ink)" strokeWidth="5" />
-              <path d="M-10 0H10M0-10V10" stroke="var(--ink)" strokeWidth="4" />
-            </motion.g>
-          )}
-        </svg>
-        <span className="absolute left-2 top-2 mono-tag">{config.yHighLabel}</span>
-        <span className="absolute bottom-2 left-2 mono-tag">{config.xLowLabel}</span>
-        <span className="absolute bottom-2 right-2 mono-tag">{config.xHighLabel}</span>
-        <span className="absolute bottom-8 left-2 mono-tag">{config.yLowLabel}</span>
-      </div>
+      <QuadrantPlotFrame labels={config}>
+        <div className="border-4 border-[var(--ink)] bg-white">
+          <svg viewBox="0 0 1000 650" role="img" aria-label={`${aggregate?.total ?? 0} responses placed on ${config.xLowLabel} to ${config.xHighLabel} and ${config.yLowLabel} to ${config.yHighLabel}`} className="block w-full">
+            <line x1="500" x2="500" y1="30" y2="620" stroke="var(--ink)" strokeWidth="4" />
+            <line x1="30" x2="970" y1="325" y2="325" stroke="var(--ink)" strokeWidth="4" />
+            {sampled.map((point, index) => (
+              <motion.circle
+                key={point.id}
+                initial={{ r: 0, opacity: 0 }}
+                animate={{ cx: x(point.x), cy: y(point.y), r: 10, opacity: 0.72 }}
+                transition={{ delay: Math.min(index * 0.006, 0.25), type: "spring", stiffness: 220, damping: 19 }}
+                fill={OPTION_COLORS[index % OPTION_COLORS.length]}
+                stroke="var(--ink)"
+                strokeWidth="3"
+              />
+            ))}
+            {aggregate?.centroid && (
+              <motion.g animate={{ x: x(aggregate.centroid.x), y: y(aggregate.centroid.y) }}>
+                <circle r="24" fill="var(--yellow)" stroke="var(--ink)" strokeWidth="5" />
+                <path d="M-10 0H10M0-10V10" stroke="var(--ink)" strokeWidth="4" />
+              </motion.g>
+            )}
+          </svg>
+        </div>
+      </QuadrantPlotFrame>
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat label="placed">{aggregate?.total ?? 0}</Stat>
         <Stat label="largest quadrant">

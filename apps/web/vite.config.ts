@@ -23,6 +23,20 @@ export default defineConfig({
           process.env.VITE_DEV_API_URL ?? "http://127.0.0.1:3000",
 
         changeOrigin: true,
+        // Long-lived SSE must not inherit Node's default proxy timeouts.
+        timeout: 0,
+        proxyTimeout: 0,
+        configure(proxy) {
+          proxy.on("proxyRes", (proxyRes, _req, res) => {
+            const type = String(proxyRes.headers["content-type"] ?? "");
+            if (!type.includes("text/event-stream")) return;
+            res.setHeader("Cache-Control", "no-cache, no-store, no-transform");
+            res.setHeader("X-Accel-Buffering", "no");
+            res.setHeader("Connection", "keep-alive");
+            res.setHeader("Content-Encoding", "identity");
+            res.flushHeaders?.();
+          });
+        },
       },
     },
   },

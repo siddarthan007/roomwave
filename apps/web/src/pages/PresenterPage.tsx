@@ -1,4 +1,4 @@
-import type { ActivityState } from "@roomwave/shared";
+import type { ActivityState, ReactionBurst } from "@roomwave/shared";
 import { activityRequiresReveal } from "@roomwave/shared";
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,6 +14,7 @@ import {
 import { getHostToken } from "../lib/storage";
 import { loadPlaylist, savePlaylist, subscribePlaylist, type PlaylistEntry } from "../lib/playlist";
 import { Kicker } from "../components/ui";
+import { ReactionLayer } from "../components/ReactionLayer";
 import { useRoomStream } from "../hooks/use-room-stream";
 
 /**
@@ -25,6 +26,7 @@ import { useRoomStream } from "../hooks/use-room-stream";
 export function PresenterPage() {
   const { roomId } = useParams();
   const [state, setState] = useState<Awaited<ReturnType<typeof getRoomState>> | null>(null);
+  const [burst, setBurst] = useState<ReactionBurst | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // Lazy init: the run-of-show is host-local storage, read once at mount.
@@ -115,9 +117,13 @@ export function PresenterPage() {
     }
   }
 
-  // Live counts ride the same SSE stream as every other surface; polling in
-  // the effect above is only a fallback when this tab is backgrounded.
-  useRoomStream(state?.room.id ?? "", (event) => {
+  // Live counts and reactions ride the same SSE stream as every other surface;
+  // polling in the effect above is only a fallback when this tab is backgrounded.
+  useRoomStream(roomId ?? "", (event) => {
+    if (event.type === "reactions") {
+      setBurst({ ...event.burst });
+      return;
+    }
     if (
       event.type === "aggregate.updated" ||
       event.type === "participant.count" ||
@@ -127,7 +133,7 @@ export function PresenterPage() {
     ) {
       if (roomId) void getRoomState(roomId).then(setState).catch(() => null);
     }
-  }, Boolean(state));
+  }, Boolean(roomId));
 
   const responseCount = state?.responseCount ?? 0;
   const participantCount = state?.participantCount ?? 0;
@@ -169,6 +175,7 @@ export function PresenterPage() {
       className="safe-page safe-gutters page-pad mx-auto flex min-h-dvh max-w-md flex-col"
       data-room-theme={state?.room.settings.theme}
     >
+      {state?.room.settings.allowReactions && <ReactionLayer burst={burst} />}
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Kicker color="var(--red)">remote</Kicker>

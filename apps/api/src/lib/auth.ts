@@ -33,7 +33,7 @@ export function getBearerToken(
 export function isHostAuthorized(
   roomId: string,
   token: string,
-): Promise<boolean> {
+): boolean {
   const room = db
     .select()
     .from(rooms)
@@ -41,12 +41,10 @@ export function isHostAuthorized(
     .get();
 
   if (!room) {
-    return Promise.resolve(false);
+    return false;
   }
 
-  return hashToken(token).then((tokenHash) =>
-    timingSafeEqual(tokenHash, room.hostTokenHash),
-  );
+  return timingSafeEqual(hashToken(token), room.hostTokenHash);
 }
 
 /**
@@ -63,11 +61,10 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export async function findParticipantByToken(
+export function findParticipantByToken(
   token: string,
 ) {
-  const tokenHash =
-    await hashToken(token);
+  const tokenHash = hashToken(token);
 
   return db
     .select()

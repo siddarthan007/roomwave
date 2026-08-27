@@ -49,6 +49,7 @@ import {
 import { getRoomState } from "../services/room-state";
 import { roomHub } from "../realtime/room-hub";
 import { presenceHub } from "../realtime/presence-hub";
+import { participantCountScheduler } from "../realtime/count-scheduler";
 import {
   buildActivityConfig,
   listModes,
@@ -112,10 +113,7 @@ roomRoutes.post(
     const hostToken =
       createToken();
 
-    const hostTokenHash =
-      await hashToken(
-        hostToken,
-      );
+    const hostTokenHash = hashToken(hostToken);
 
     const createdAt =
       new Date().toISOString();
@@ -294,14 +292,10 @@ roomRoutes.post(
         : joinInput.data.displayName ?? generatedRoomName(nameSeed);
     const avatarSeed = joinInput.data.avatarSeed ?? crypto.randomUUID();
 
-    const token =
-      createToken();
+    const token = createToken();
+    const tokenHash = hashToken(token);
 
-    const tokenHash =
-      await hashToken(token);
-
-    // Token hashing yields to the event loop. Re-read durable state so an end
-    // that landed meanwhile wins over this join.
+    // Re-read durable state so an end that landed meanwhile wins over this join.
     const joinableRoom = db
       .select()
       .from(rooms)
@@ -366,22 +360,14 @@ roomRoutes.post(
       })
       .run();
 
-    // Join is a single discrete event; publish immediately so the new
-    // player appears without waiting out the coalescing window.
+    // Coalesce: a 500-person join wave publishes one presence frame and one
+    // count, not 500 of each.
     presenceHub.touch(
       joinableRoom.id,
       { id: participantId, displayName, avatarSeed },
       joinableRoom.settings.showPresence,
-      Date.now(),
-      { immediate: true },
     );
-
-    const participantCount = getRoomState(joinableRoom.id)?.participantCount ?? 1;
-    roomHub.publish(joinableRoom.id, {
-      type: "participant.count",
-      roomId: joinableRoom.id,
-      count: participantCount,
-    });
+    participantCountScheduler.mark(joinableRoom.id);
 
     return c.json({
       room: {
@@ -420,7 +406,7 @@ roomRoutes.patch("/:roomId/settings", async (c) => {
     );
   }
   const token = getBearerToken(c.req.header("Authorization"));
-  if (!token || !(await isHostAuthorized(roomId, token))) {
+  if (!token || !isHostAuthorized(roomId, token)) {
     return c.json(
       { error: { code: "UNAUTHORIZED", message: "Invalid host token." } },
       401,
@@ -491,7 +477,7 @@ roomRoutes.post("/:roomId/presence", async (c) => {
       401,
     );
   }
-  const participant = await findParticipantByToken(token);
+  const participant = findParticipantByToken(token);
   if (!participant || participant.roomId !== roomId) {
     return c.json(
       { error: { code: "UNAUTHORIZED", message: "Invalid participant." } },
@@ -567,10 +553,10 @@ roomRoutes.post(
 
     if (
       !token ||
-      !(await isHostAuthorized(
+      !isHostAuthorized(
         roomId,
         token,
-      ))
+      )
     ) {
       return c.json(
         {

@@ -31,11 +31,13 @@ const EVENT_NAMES: RoomEvent["type"][] = [
  *  - watchdog timer: if no SSE event (heartbeat included) arrives within
  *    HEARTBEAT_TIMEOUT, force-reconnect. Catches half-open connections where
  *    the socket looks alive but events silently stop (NAT drops, proxy idle
- *    eviction). This is the main cause of "updates only arrive after a tab
- *    switch".
+ *    eviction).
  *  - visibilitychange: browsers throttle timers in background tabs and may
  *    suspend the connection; on return to foreground we reconnect immediately
  *    (with ?after= replay) instead of waiting out the backoff timer.
+ *
+ * Keep EventSource on the page origin so LAN phones hit Vite's `/api` proxy
+ * instead of 127.0.0.1. The proxy is configured to flush `text/event-stream`.
  */
 export function useRoomStream(
   roomId: string,

@@ -27,6 +27,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { submitResponse } from "../lib/api";
+import { QuadrantPlotFrame } from "./quadrant-axes";
 import { ErrorNote } from "./ui";
 import { onSurface } from "./surface-color";
 import {
@@ -664,8 +665,7 @@ export function QuadrantDropInput({ activity, token }: CommonProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-[auto_1fr] items-center gap-3">
-        <span className="-rotate-90 whitespace-nowrap text-xs font-black uppercase">{config.yHighLabel}</span>
+      <QuadrantPlotFrame labels={config}>
         <div
           {...bind()}
           ref={padRef}
@@ -688,15 +688,12 @@ export function QuadrantDropInput({ activity, token }: CommonProps) {
           <motion.span
             animate={{ left: `${point.x / 10}%`, bottom: `${point.y / 10}%` }}
             transition={{ type: "spring", stiffness: 360, damping: 28 }}
-            className="absolute h-8 w-8 -translate-x-1/2 translate-y-1/2 rounded-full border-4 border-[var(--ink)] bg-[var(--pink)] block-shadow-sm"
+            className="absolute z-10 h-8 w-8 -translate-x-1/2 translate-y-1/2 rounded-full border-4 border-[var(--ink)] bg-[var(--pink)] block-shadow-sm"
           />
         </div>
-      </div>
-      <div className="ml-8 flex justify-between text-sm font-black">
-        <span>{config.xLowLabel}</span><span>{config.xHighLabel}</span>
-      </div>
+      </QuadrantPlotFrame>
       <p className={`mono-tag ${committed ? "text-[var(--green)]" : "text-[var(--ink-soft)]"}`}>
-        {committed ? "✓ Point placed. Drag or use arrow keys to adjust." : `bottom means ${config.yLowLabel}`}
+        {committed ? "Point placed. Drag or use arrow keys to adjust." : "drag onto a labelled quadrant"}
       </p>
       {error && <ErrorNote message={error} />}
     </div>

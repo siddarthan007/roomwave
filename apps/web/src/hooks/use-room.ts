@@ -63,6 +63,7 @@ export function useRoom(roomId: string) {
           break;
 
         case "aggregate.updated":
+          setArrival((tick) => tick + 1);
           setState((current) =>
             current && current.activity?.id === event.activityId
               ? {
@@ -122,11 +123,7 @@ export function useRoom(roomId: string) {
     [refresh],
   );
 
-  const connection = useRoomStream(
-    roomId,
-    handleEvent,
-    Boolean(state && state.room.id === roomId),
-  );
+  const connection = useRoomStream(roomId, handleEvent, Boolean(roomId));
 
   // Safety-net polling only while the live stream is NOT healthy: while SSE
   // is connected a poll could interleave a stale HTTP snapshot between fresh

@@ -5,6 +5,8 @@ export type AppEnv = {
   Bindings: {
     /** Socket peer address supplied by Bun, never by a request header. */
     remoteAddress?: string;
+    /** Live Bun.serve handle so SSE routes can disable the 10s idle timer. */
+    bunServer?: Bun.Server<undefined>;
   };
 };
 

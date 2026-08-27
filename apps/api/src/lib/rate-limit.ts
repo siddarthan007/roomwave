@@ -49,22 +49,31 @@ export class RateLimiter {
       }
     }
   }
+
+  /** Test hook: isolation between files that share one process. */
+  clear() {
+    this.windows.clear();
+  }
 }
 
 /** Room creation: strict enough to stop scripts, generous for local demos. */
-export const roomCreateLimiter = new RateLimiter(5, 60_000);
+export const roomCreateLimiter = new RateLimiter(40, 60_000);
 export const globalRoomCreateLimiter = new RateLimiter(300, 60_000);
 
-/** Joining: limits repeated participant creation from one address + room. */
-export const joinLimiter = new RateLimiter(30, 60_000);
-export const joinAttemptLimiter = new RateLimiter(60, 60_000);
-export const globalJoinAttemptLimiter = new RateLimiter(3_000, 60_000);
+/**
+ * Hall burst: 500 people on one NAT (school Wi-Fi) joining and opening the
+ * live stream inside 10 seconds. Per-IP caps must not be smaller than that.
+ * Room capacity (`maxParticipants`) is still the seat limit.
+ */
+export const joinLimiter = new RateLimiter(600, 10_000);
+export const joinAttemptLimiter = new RateLimiter(800, 10_000);
+export const globalJoinAttemptLimiter = new RateLimiter(8_000, 60_000);
 
-/** Public snapshots are useful, but cannot be an unlimited aggregate oracle. */
-export const publicReadLimiter = new RateLimiter(120, 60_000);
+/** Public snapshots: a full room refreshing after a flaky reconnect. */
+export const publicReadLimiter = new RateLimiter(800, 15_000);
 
-/** Authenticated presence leases: reconnect-friendly, bounded before hashing. */
-export const presenceLimiter = new RateLimiter(120, 60_000);
+/** Presence leases: 20s client cadence, plus a join wave. */
+export const presenceLimiter = new RateLimiter(800, 15_000);
 
 /** Responses: 12 per participant per 10 s (answer changes still easy). */
 export const responseLimiter = new RateLimiter(12, 10_000);
@@ -76,8 +85,8 @@ export const crowdMeterLimiter = new RateLimiter(20, 5_000);
 export const reactionParticipantLimiter = new RateLimiter(4, 2_000);
 export const reactionRoomLimiter = new RateLimiter(240, 1_000);
 
-/** Public event stream reconnects: enough for tabs, bounded against churn. */
-export const eventStreamLimiter = new RateLimiter(30, 60_000);
+/** SSE opens: one per tab, plus reconnects, from a shared public IP. */
+export const eventStreamLimiter = new RateLimiter(800, 15_000);
 
 /**
  * Host commands: authenticated, but a buggy host client or leaked token must
@@ -86,6 +95,27 @@ export const eventStreamLimiter = new RateLimiter(30, 60_000);
  */
 export const hostCommandLimiter = new RateLimiter(120, 60_000);
 
-/** One room may fill a hall, but must not grow listeners without a ceiling. */
-export const MAX_EVENT_SUBSCRIBERS_PER_ROOM = 500;
-export const MAX_EVENT_SUBSCRIBERS_GLOBAL = 2_000;
+/** Players plus stage, host, presenter, and a reconnect overlap. */
+export const MAX_EVENT_SUBSCRIBERS_PER_ROOM = 800;
+export const MAX_EVENT_SUBSCRIBERS_GLOBAL = 4_000;
+
+const ALL_LIMITERS = [
+  roomCreateLimiter,
+  globalRoomCreateLimiter,
+  joinLimiter,
+  joinAttemptLimiter,
+  globalJoinAttemptLimiter,
+  publicReadLimiter,
+  presenceLimiter,
+  responseLimiter,
+  crowdMeterLimiter,
+  reactionParticipantLimiter,
+  reactionRoomLimiter,
+  eventStreamLimiter,
+  hostCommandLimiter,
+];
+
+/** Drop in-memory windows so a 500-join burst test cannot starve later cases. */
+export function resetRateLimitersForTests() {
+  for (const limiter of ALL_LIMITERS) limiter.clear();
+}

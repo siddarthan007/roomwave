@@ -140,7 +140,9 @@ export function ParticipantPage() {
       className={`safe-page safe-gutters safe-top relative min-h-dvh overflow-x-clip pt-6 ${state.room.settings.allowReactions ? "has-reaction-dock" : "pb-8"}`}
       data-room-theme={state.room.settings.theme}
     >
-      <ReactionLayer burst={burst} localBurst={localBurst} />
+      {state.room.settings.allowReactions && (
+        <ReactionLayer burst={burst} localBurst={localBurst} />
+      )}
 
       <header className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">

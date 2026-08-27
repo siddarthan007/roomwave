@@ -1,81 +1,55 @@
-import type {
-  RoomEvent,
-} from "@roomwave/shared";
+import type { RoomEvent } from "@roomwave/shared";
 
 import { assignSequence } from "./event-sequence";
+import { encodeSse } from "./sse-encode";
 
 type Listener = (
   event: RoomEvent,
   seq: number,
+  encoded: Uint8Array,
 ) => void | Promise<void>;
 
 class RoomHub {
-  private rooms =
-    new Map<
-      string,
-      Set<Listener>
-    >();
+  private rooms = new Map<string, Set<Listener>>();
 
-  subscribe(
-    roomId: string,
-    listener: Listener,
-  ) {
-    let listeners =
-      this.rooms.get(roomId);
-
+  subscribe(roomId: string, listener: Listener) {
+    let listeners = this.rooms.get(roomId);
     if (!listeners) {
-      listeners =
-        new Set<Listener>();
-
-      this.rooms.set(
-        roomId,
-        listeners,
-      );
+      listeners = new Set<Listener>();
+      this.rooms.set(roomId, listeners);
     }
-
     listeners.add(listener);
-
     return () => {
-      listeners?.delete(
-        listener,
-      );
-
-      if (
-        listeners?.size === 0
-      ) {
-        this.rooms.delete(
-          roomId,
-        );
+      listeners?.delete(listener);
+      if (listeners?.size === 0) {
+        this.rooms.delete(roomId);
       }
     };
   }
 
-  publish(
-    roomId: string,
-    event: RoomEvent,
-  ) {
+  publish(roomId: string, event: RoomEvent) {
     // Sequence centrally so ids are identical for every subscriber and events
     // published with zero listeners still advance the counter (otherwise a
     // reconnecting client's `after` would collide with the snapshot id).
     const seq = assignSequence(roomId, event);
-    const listeners =
-      this.rooms.get(roomId);
+    const listeners = this.rooms.get(roomId);
+    if (!listeners) return seq;
 
-    if (!listeners) {
-      return seq;
-    }
+    // Encode once. A 500-seat room must not JSON.stringify the same aggregate
+    // 500 times on every coalesced flush.
+    const encoded = encodeSse(event.type, event, { id: String(seq) });
 
-    for (
-      const listener of listeners
-    ) {
-      Promise.resolve(
-        listener(event, seq),
-      ).catch((error) => {
-        console.error(
-          "RoomHub listener error",
-          error,
-        );
-      });
+    for (const listener of listeners) {
+      try {
+        const result = listener(event, seq, encoded);
+        if (result && typeof result.then === "function") {
+          result.catch((error) => {
+            console.error("RoomHub listener error", error);
+          });
+        }
+      } catch (error) {
+        console.error("RoomHub listener error", error);
+      }
     }
     return seq;
   }
@@ -97,5 +71,4 @@ class RoomHub {
   }
 }
 
-export const roomHub =
-  new RoomHub();
+export const roomHub = new RoomHub();

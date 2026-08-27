@@ -40,7 +40,7 @@ import {
   validateResponseFor,
 } from "../services/modes";
 import { canReset, canTransition } from "../services/activity-state";
-import { getRoomState, countStoredResponses } from "../services/room-state";
+import { getRoomState } from "../services/room-state";
 import {
   cancelActivityDeadline,
   deadlineFor,
@@ -65,7 +65,7 @@ async function requireHost(
     c.req.header("Authorization"),
   );
   return Boolean(
-    token && (await isHostAuthorized(roomId, token)),
+    token && isHostAuthorized(roomId, token),
   );
 }
 
@@ -615,7 +615,7 @@ activityRoutes.post("/:activityId/responses", async (c) => {
     );
   }
 
-  const participant = await findParticipantByToken(token);
+  const participant = findParticipantByToken(token);
 
   if (!participant || participant.roomId !== activity.roomId) {
     return c.json(
@@ -801,7 +801,8 @@ activityRoutes.post("/:activityId/responses", async (c) => {
       .run();
   }
 
-  // Ephemeral arrival hint (lossy by design).
+  // Presence is coalesced. Canonical live results ride aggregate.updated so
+  // a 500-vote burst does not fan out 500 response.created frames per seat.
   presenceHub.touch(
     writableActivity.roomId,
     {
@@ -811,14 +812,6 @@ activityRoutes.post("/:activityId/responses", async (c) => {
     },
     responseRoom.settings.showPresence,
   );
-  roomHub.publish(writableActivity.roomId, {
-    type: "response.created",
-    roomId: writableActivity.roomId,
-    activityId,
-    ...(writableActivity.type === "question-board"
-      ? {}
-      : { responseCount: countStoredResponses(activityId) }),
-  });
 
   // Canonical aggregate follows on a coalesced schedule.
   aggregateScheduler.markDirty(activityId, writableActivity.roomId);
@@ -900,7 +893,7 @@ activityRoutes.post("/reactions", async (c) => {
   }
 
   const token = getBearerToken(c.req.header("Authorization"));
-  const participant = token ? await findParticipantByToken(token) : null;
+  const participant = token ? findParticipantByToken(token) : null;
   if (!participant || participant.roomId !== roomId) {
     return c.json(
       {

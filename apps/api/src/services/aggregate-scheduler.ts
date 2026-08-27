@@ -2,15 +2,16 @@
 // Dirty-activity scheduler: coalesces burst votes into one aggregate
 // computation + broadcast per bounded interval, instead of per vote.
 // Canonical state is always the database; this only paces broadcasts.
-// Quiet rooms flush on a 40ms leading edge so the projector moves with
-// the first tap; a burst still folds into the 350ms window.
+// Quiet rooms flush on a 16ms leading edge so the projector moves with
+// the first tap; a 500-vote burst still folds into the 80ms window instead
+// of broadcasting one aggregate per person.
 // ---------------------------------------------------------------------------
 
 import { roomHub } from "../realtime/room-hub";
 import { getRoomState } from "./room-state";
 
-const COALESCE_MS = 350;
-const LEADING_MS = 40;
+const COALESCE_MS = 80;
+const LEADING_MS = 16;
 const PULSE_REFRESH_MS = 1_000;
 
 interface PendingActivity {

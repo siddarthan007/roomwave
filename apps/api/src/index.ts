@@ -35,12 +35,20 @@ if (allowedOrigins.has("*")) {
 app.use(
   "/api/*",
   cors({
-    origin: (origin) =>
-      allowedOrigins.has(origin.replace(/\/$/, ""))
-        ? origin
-        : null,
+    origin: (origin) => {
+      if (!origin) return null;
+      const normalized = origin.replace(/\/$/, "");
+      return allowedOrigins.has(normalized) ? origin : null;
+    },
     allowMethods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"],
-    allowHeaders: ["Authorization", "Content-Type", "X-Room-Id"],
+    allowHeaders: [
+      "Authorization",
+      "Content-Type",
+      "X-Room-Id",
+      "Accept",
+      "Last-Event-ID",
+      "Cache-Control",
+    ],
     exposeHeaders: ["Retry-After"],
     maxAge: 86_400,
   }),
@@ -158,10 +166,14 @@ if (!Number.isInteger(configuredPort) || configuredPort < 1 || configuredPort > 
 
 export default {
   port: configuredPort,
+  // Bun's default 10s idle timer kills quiet SSE streams. Cap at the
+  // documented maximum; each /events request also calls timeout(req, 0).
+  idleTimeout: 255,
   maxRequestBodySize: 64 * 1024,
   fetch(request: Request, server: Bun.Server<undefined>) {
     return app.fetch(request, {
       remoteAddress: server.requestIP(request)?.address,
+      bunServer: server,
     });
   },
 };

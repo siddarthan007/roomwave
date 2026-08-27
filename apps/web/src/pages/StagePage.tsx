@@ -205,7 +205,9 @@ export function StagePage() {
         {state.room.code}
       </div>
 
-      {state.room.settings.allowReactions && <ReactionLayer burst={burst} />}
+      {state.room.settings.allowReactions && (
+        <ReactionLayer burst={burst} size="stage" />
+      )}
 
       {/* Minimal room chrome in the top corners. */}
       <header className="stage-safe stage-chrome relative z-10 grid grid-cols-1 items-start gap-5 p-4 sm:flex sm:flex-wrap sm:justify-between sm:p-8 md:p-12">

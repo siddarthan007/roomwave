@@ -10,7 +10,8 @@ import type { ReactionKind } from "@roomwave/shared";
 
 import { roomHub } from "../realtime/room-hub";
 
-const BUCKET_MS = 280;
+/** Quiet rooms flush on the next frame so every screen paints with the tap. */
+const LEADING_MS = 16;
 /** Hard cap of reaction units represented per bucket per kind. */
 const MAX_BURST = 24;
 
@@ -23,37 +24,35 @@ interface Bucket {
 let bucketCounter = 0;
 
 export class ReactionHub {
-  private rooms = new Map<string, Bucket[]>();
+  private rooms = new Map<string, Bucket>();
 
   add(roomId: string, kind: ReactionKind, weight = 1) {
-    let buckets = this.rooms.get(roomId);
-    if (!buckets) {
-      buckets = [];
-      this.rooms.set(roomId, buckets);
+    const existing = this.rooms.get(roomId);
+    if (existing?.timer) {
+      existing.counts.set(
+        kind,
+        Math.min(MAX_BURST, (existing.counts.get(kind) ?? 0) + weight),
+      );
+      return;
     }
 
-    let bucket = buckets.find((candidate) => candidate.timer !== null);
-    if (!bucket) {
-      bucketCounter += 1;
-      bucket = {
-        counts: new Map(),
-        timer: null,
-        id: bucketCounter,
-      };
-      buckets.push(bucket);
+    bucketCounter += 1;
+    const bucket: Bucket = {
+      counts: new Map([[kind, Math.min(MAX_BURST, weight)]]),
+      timer: null,
+      id: bucketCounter,
+    };
+    bucket.timer = setTimeout(() => this.tick(roomId), LEADING_MS);
+    bucket.timer.unref?.();
+    this.rooms.set(roomId, bucket);
+  }
 
-      bucket.timer = setTimeout(() => {
-        bucket!.timer = null;
-        this.flush(roomId, bucket!);
-        // Drop closed buckets.
-        const remaining = (this.rooms.get(roomId) ?? []).filter(
-          (candidate) => candidate.timer !== null,
-        );
-        if (remaining.length === 0) this.rooms.delete(roomId);
-      }, BUCKET_MS);
-    }
-
-    bucket.counts.set(kind, Math.min(MAX_BURST, (bucket.counts.get(kind) ?? 0) + weight));
+  private tick(roomId: string) {
+    const bucket = this.rooms.get(roomId);
+    if (!bucket) return;
+    bucket.timer = null;
+    this.rooms.delete(roomId);
+    this.flush(roomId, bucket);
   }
 
   private flush(roomId: string, bucket: Bucket) {
@@ -69,13 +68,12 @@ export class ReactionHub {
 
   /** Cancel pending bursts so a deleted room cannot republish. */
   forget(roomId: string) {
-    const buckets = this.rooms.get(roomId);
-    if (!buckets) return;
-    for (const bucket of buckets) {
-      if (bucket.timer) clearTimeout(bucket.timer);
-    }
+    const bucket = this.rooms.get(roomId);
+    if (!bucket) return;
+    if (bucket.timer) clearTimeout(bucket.timer);
     this.rooms.delete(roomId);
   }
 }
 
 export const reactionHub = new ReactionHub();
+export const REACTION_LEADING_MS = LEADING_MS;

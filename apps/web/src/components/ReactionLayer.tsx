@@ -1,7 +1,7 @@
 import type { ReactionBurst, ReactionKind } from "@roomwave/shared";
 
 import { useEffect, useRef, useState } from "react";
-import { useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { REACTION_COLORS } from "../lib/reactions";
 import { ReactionStamp } from "./ReactionStamp";
@@ -9,12 +9,11 @@ import { ReactionStamp } from "./ReactionStamp";
 /* oxlint-disable react-hooks/exhaustive-deps -- ingest is a render-local burst helper */
 
 /**
- * Bounded live-reaction swarm.
- *
- * Hard limits (per ARCHITECTURE-ESSENTIALS §13):
+ * Meet-style live reaction swarm: stamps rise from the bottom of every
+ * connected screen. Bounded per ARCHITECTURE-ESSENTIALS §13:
  *  - max 18 DOM particles alive at once; excess bursts collapse into a
  *    "+N" counter pulse instead of more nodes;
- *  - every particle self-removes via animationend;
+ *  - every particle self-removes when its rise finishes;
  *  - nothing renders when the tab is hidden.
  */
 
@@ -25,6 +24,8 @@ interface Particle {
   kind: ReactionKind;
   x: number;
   drift: number;
+  tilt: number;
+  size: number;
 }
 
 interface Pulse {
@@ -38,10 +39,13 @@ let nextId = 1;
 export function ReactionLayer({
   burst,
   localBurst,
+  size = "room",
 }: {
   burst: ReactionBurst | null;
   /** Instant particle from the sender's own tap, before the SSE bucket lands. */
   localBurst?: ReactionBurst | null;
+  /** Projector stamps read from the back row; phone stamps stay thumb-sized. */
+  size?: "room" | "stage";
 }) {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [pulse, setPulse] = useState<Pulse | null>(null);
@@ -49,6 +53,7 @@ export function ReactionLayer({
   const particlesRef = useRef<Particle[]>([]);
   const lastLocal = useRef<{ kind: ReactionKind; at: number } | null>(null);
   const shouldReduceMotion = useReducedMotion();
+  const stampPx = size === "stage" ? 64 : 48;
 
   function ingest(next: ReactionBurst | null, source: "server" | "local") {
     if (!next) return;
@@ -79,8 +84,10 @@ export function ReactionLayer({
     const fresh: Particle[] = Array.from({ length: spawn }, () => ({
       id: nextId++,
       kind: next.kind,
-      x: 8 + Math.random() * 84,
-      drift: -30 + Math.random() * 60,
+      x: 12 + Math.random() * 76,
+      drift: -48 + Math.random() * 96,
+      tilt: -18 + Math.random() * 36,
+      size: stampPx - 8 + Math.round(Math.random() * 16),
     }));
 
     const stacked = [
@@ -103,13 +110,13 @@ export function ReactionLayer({
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- local tap is an external visual event
     ingest(localBurst ?? null, "local");
-  }, [localBurst, shouldReduceMotion]);
+  }, [localBurst, shouldReduceMotion, stampPx]);
 
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- ingest is a render-local helper
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- SSE burst is an external visual event
     ingest(burst, "server");
-  }, [burst, shouldReduceMotion]);
+  }, [burst, shouldReduceMotion, stampPx]);
 
   function removeParticle(id: number) {
     const stacked = particlesRef.current.filter((candidate) => candidate.id !== id);
@@ -122,55 +129,60 @@ export function ReactionLayer({
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 z-50 overflow-hidden"
     >
-      {particles.map((particle) => (
-        <span
-          key={particle.id}
-          onAnimationEnd={() => removeParticle(particle.id)}
-          className="absolute bottom-6 text-3xl"
-          style={{
-            left: `${particle.x}%`,
-            color: REACTION_COLORS[particle.kind],
-            animation: "rw-rise 2.2s ease-out forwards",
-            ["--rw-drift" as string]: `${particle.drift}px`,
-          }}
-        >
-          <ReactionStamp kind={particle.kind} size={36} />
-        </span>
-      ))}
+      <AnimatePresence>
+        {particles.map((particle) => (
+          <motion.span
+            key={particle.id}
+            className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] -translate-x-1/2 will-change-transform"
+            style={{
+              left: `${particle.x}%`,
+              color: REACTION_COLORS[particle.kind],
+            }}
+            initial={{
+              y: "0vh",
+              x: 0,
+              opacity: 0,
+              scale: 0.4,
+              rotate: particle.tilt * 0.35,
+            }}
+            animate={{
+              y: ["0vh", "-10vh", "-70vh"],
+              x: [0, particle.drift * 0.25, particle.drift],
+              opacity: [0, 1, 0],
+              scale: [0.4, 1.18, 0.86],
+              rotate: [particle.tilt * 0.35, particle.tilt, particle.tilt * 1.15],
+            }}
+            transition={{
+              duration: 2.2,
+              times: [0, 0.12, 1],
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            onAnimationComplete={() => removeParticle(particle.id)}
+          >
+            <ReactionStamp kind={particle.kind} size={particle.size} />
+          </motion.span>
+        ))}
+      </AnimatePresence>
 
       {pulse && (
-        <span
+        <motion.span
           key={pulse.id}
-          onAnimationEnd={() => setPulse(null)}
           className={`display absolute bottom-10 right-8 border-2
             border-[var(--ink)] bg-[var(--paper)] px-3 py-1 block-shadow-sm ${
               pulse.extra >= 12 ? "text-3xl" : "text-xl"
             }`}
-          style={{
-            color: REACTION_COLORS[pulse.kind],
-            animation: "rw-pulse 1.4s ease-out forwards",
-          }}
+          style={{ color: REACTION_COLORS[pulse.kind] }}
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: [0.7, 1.05, 1], opacity: [0, 1, 0] }}
+          transition={{ duration: 1.4, times: [0, 0.2, 1], ease: "easeOut" }}
+          onAnimationComplete={() => setPulse(null)}
         >
           +{pulse.extra}
           {pulse.extra >= 12 && (
             <span className="mono-tag ml-2 text-[var(--ink)]">combo!</span>
           )}
-        </span>
+        </motion.span>
       )}
-
-      <style>{`
-        @keyframes rw-rise {
-          0%   { transform: translate(0, 0) scale(0.6); opacity: 0; }
-          12%  { opacity: 1; transform: translate(calc(var(--rw-drift) * 0.2), -8vh) scale(1.15); }
-          100% { transform: translate(var(--rw-drift), -72vh) scale(0.9); opacity: 0; }
-        }
-        @keyframes rw-pulse {
-          0%   { transform: scale(0.7); opacity: 0; }
-          20%  { transform: scale(1.05); opacity: 1; }
-          80%  { opacity: 1; }
-          100% { transform: scale(1); opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 }
